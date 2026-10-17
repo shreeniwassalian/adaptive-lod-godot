@@ -1,0 +1,38 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/env/test_environment.gd" id="1_env"]
+[ext_resource type="Script" path="res://scripts/env/free_fly_camera.gd" id="2_cam"]
+[ext_resource type="PackedScene" path="res://scenes/generated/baked_environment.tscn" id="3_baked"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="4_player"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("ProceduralSkyMaterial_sky")
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 3
+ambient_light_color = Color(0.55, 0.6, 0.65, 1)
+tonemap_mode = 2
+
+[node name="TestEnvironment" type="Node3D"]
+script = ExtResource("1_env")
+
+[node name="GeneratedEnvironment" parent="." instance=ExtResource("3_baked")]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8660254, 0.3830222, -0.3213938, 0, 0.6427876, 0.7660444, 0.5, -0.6634139, 0.5566704, 0, 30, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 120.0
+
+[node name="Camera3D" type="Camera3D" parent="."]
+far = 600.0
+script = ExtResource("2_cam")
+
+[node name="Player" parent="." instance=ExtResource("4_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.427051, 3.39694, 23.76336)

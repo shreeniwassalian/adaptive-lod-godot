@@ -1,0 +1,118 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/world/landscape_environment.gd" id="1_env"]
+[ext_resource type="Terrain3DAssets" path="res://data/terrain3d/assets.tres" id="2_00cma"]
+[ext_resource type="PackedScene" path="res://scenes/generated/river.scn" id="3_4pvkx"]
+[ext_resource type="PackedScene" path="res://scenes/generated/vegetation.scn" id="4_m7x6x"]
+[ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="5_6nipn"]
+[ext_resource type="Script" path="res://scripts/env/free_fly_camera.gd" id="5_fly"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="6_player"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
+sky_top_color = Color(0.22, 0.42, 0.74, 1)
+sky_horizon_color = Color(0.64, 0.74, 0.84, 1)
+sky_curve = 0.18
+ground_bottom_color = Color(0.22, 0.25, 0.22, 1)
+ground_horizon_color = Color(0.64, 0.72, 0.78, 1)
+ground_curve = 0.03
+sun_angle_max = 25.0
+sun_curve = 0.12
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("ProceduralSkyMaterial_sky")
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 3
+ambient_light_sky_contribution = 0.9
+tonemap_mode = 2
+tonemap_white = 6.0
+fog_enabled = true
+fog_light_color = Color(0.64, 0.73, 0.83, 1)
+fog_sun_scatter = 0.2
+fog_density = 0.0011
+fog_aerial_perspective = 0.4
+fog_sky_affect = 0.6
+
+[sub_resource type="Gradient" id="Gradient_4pvkx"]
+offsets = PackedFloat32Array(0.2, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_m7x6x"]
+noise_type = 2
+frequency = 0.03
+cellular_jitter = 3.0
+cellular_return_type = 0
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 50.0
+domain_warp_fractal_type = 2
+domain_warp_fractal_lacunarity = 1.5
+domain_warp_fractal_gain = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_851ur"]
+noise = SubResource("FastNoiseLite_m7x6x")
+color_ramp = SubResource("Gradient_4pvkx")
+seamless = true
+
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_s2o6o"]
+_shader_parameters = {
+&"bias_distance": null,
+&"blend_sharpness": null,
+&"depth_blur": null,
+&"enable_macro_variation": true,
+&"enable_projection": null,
+&"flat_terrain_normals": null,
+&"macro_variation1": Color(0.92, 0.96, 0.88, 1),
+&"macro_variation2": Color(1, 0.95, 0.88, 1),
+&"macro_variation_slope": null,
+&"mipmap_bias": null,
+&"noise1_angle": null,
+&"noise1_offset": null,
+&"noise1_scale": null,
+&"noise2_scale": null,
+&"noise_texture": SubResource("NoiseTexture2D_851ur"),
+&"projection_threshold": null
+}
+world_background = 0
+
+[node name="Terrain3DEnvironment" type="Node3D" unique_id=1572663912]
+script = ExtResource("1_env")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1973092185]
+environment = SubResource("Environment_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=236145796]
+transform = Transform3D(-0.707107, 0.435338, -0.557208, 0, 0.788011, 0.615661, 0.707107, 0.435338, -0.557208, 0, 200, 0)
+light_color = Color(1, 0.95, 0.86, 1)
+light_energy = 1.25
+shadow_enabled = true
+shadow_blur = 1.4
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 320.0
+
+[node name="Terrain3D" type="Terrain3D" parent="." unique_id=329132410]
+data_directory = "res://data/terrain3d/valley"
+material = SubResource("Terrain3DMaterial_s2o6o")
+assets = ExtResource("2_00cma")
+collision_mode = 3
+top_level = true
+metadata/_edit_lock_ = true
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=589198663]
+far = 3000.0
+script = ExtResource("5_fly")
+
+[node name="Player" type="CharacterBody3D" parent="." unique_id=1848369478 instance=ExtResource("6_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 180, 12.1176405, 182)
+collision_layer = 2
+collision_mask = 5
+velocity = Vector3(0, -0.81666666, 0)
+floor_max_angle = 0.872665
+floor_snap_length = 0.4
+script = ExtResource("5_6nipn")
+
+[node name="River" type="Node3D" parent="." unique_id=233556474 instance=ExtResource("3_4pvkx")]
+
+[node name="Vegetation" type="Node3D" parent="." unique_id=1706231426 instance=ExtResource("4_m7x6x")]
