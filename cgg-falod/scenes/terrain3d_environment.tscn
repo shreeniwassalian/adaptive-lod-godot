@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="5_6nipn"]
 [ext_resource type="Script" path="res://scripts/env/free_fly_camera.gd" id="5_fly"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="6_player"]
+[ext_resource type="Script" path="res://scripts/lod/baseline_lod.gd" id="7_lod"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
 sky_top_color = Color(0.22, 0.42, 0.74, 1)
@@ -116,3 +117,6 @@ script = ExtResource("5_6nipn")
 [node name="River" type="Node3D" parent="." unique_id=233556474 instance=ExtResource("3_4pvkx")]
 
 [node name="Vegetation" type="Node3D" parent="." unique_id=1706231426 instance=ExtResource("4_m7x6x")]
+
+[node name="VegetationLod" type="Node" parent="."]
+script = ExtResource("7_lod")

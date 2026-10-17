@@ -4,10 +4,11 @@ extends RefCounted
 ## Unknown or malformed --bench-* options are collected in `errors`; the runner refuses to start with them.
 
 const VSYNC_MODES := ["off", "on", "adaptive", "mailbox"]
+const LOD_MODES := ["none", "baseline"]
 
 ## Names the run in the output file names and the metadata.
 var label: String = "no_lod"
-## Which LOD controller is active. Only "none" exists in milestone 1; recorded for later comparisons.
+## Vegetation LOD mode, one of LOD_MODES: "none" leaves the baked scene as is (reference run).
 var lod_mode: String = "none"
 ## Seeds Godot's global RNG at start. The world itself is baked and does not depend on it
 ## (its own seed is read from the scene and recorded as world_seed).
@@ -87,6 +88,8 @@ func _float(key: String, value: String) -> float:
 func _validate() -> void:
 	if not VSYNC_MODES.has(vsync):
 		errors.append("--bench-vsync must be one of %s, got '%s'" % [VSYNC_MODES, vsync])
+	if not LOD_MODES.has(lod_mode):
+		errors.append("--bench-lod-mode must be one of %s, got '%s'" % [LOD_MODES, lod_mode])
 	if duration_s <= 0.0 or warmup_s < 0.0 or speed_mps <= 0.0:
 		errors.append("duration and speed must be > 0, warmup >= 0")
 	if width < 320 or height < 240:

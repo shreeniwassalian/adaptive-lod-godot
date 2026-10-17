@@ -5,7 +5,7 @@ extends RefCounted
 const STAT_COLUMNS := [
 	"frame_time_ms", "process_ms_1hz", "physics_ms_1hz", "render_cpu_ms", "render_gpu_ms",
 	"draw_calls", "draw_calls_visible", "primitives", "primitives_visible", "objects", "video_mem_mb",
-	"lod_switches", "lod_bias",
+	"lod_switches", "lod_bias", "lod_update_ms", "trees_lod0", "trees_lod1", "trees_lod2",
 ]
 ## Frames slower than this count as hitches.
 const HITCH_MS := 33.4
@@ -26,6 +26,18 @@ static func summarize(columns: PackedStringArray, rows: Array, measured_s: float
 			if row[index] != null:
 				values.append(float(row[index]))
 		result["columns"][name] = _stats(values, rows.size())
+
+	var switches: Dictionary = result["columns"]["lod_switches"]
+	if switches["available"]:
+		var index := columns.find("lod_switches")
+		var total := 0
+		var frames_with_switches := 0
+		for row in rows:
+			total += int(row[index])
+			if int(row[index]) > 0:
+				frames_with_switches += 1
+		result["lod_switches_total"] = total
+		result["frames_with_lod_switches"] = frames_with_switches
 
 	var frame_stats: Dictionary = result["columns"]["frame_time_ms"]
 	if frame_stats["available"]:

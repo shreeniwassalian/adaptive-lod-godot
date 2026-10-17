@@ -1,7 +1,8 @@
-# Benchmark (milestone 1)
+# Benchmark
 
-Measures the existing, unmodified Terrain3D scene along a scripted camera path. **No LOD controller exists yet**,
-so this is the "no LOD" reference run. It does not use the player, input, or physics.
+Measures the Terrain3D scene along a scripted camera path with a selectable vegetation LOD mode
+(`--bench-lod-mode=none|baseline`, see `docs/vegetation_lod.md`). `none` leaves the baked scene untouched and is
+the reference run. It does not use the player, input, or physics.
 
 ## Run
 
@@ -14,7 +15,7 @@ with exit code 2. A finished run exits 0 (1 if the CSV could not be written or t
 | Option | Default | Meaning |
 |---|---|---|
 | `--bench-label=NAME` | `no_lod` | file-name prefix, recorded in metadata |
-| `--bench-lod-mode=NAME` | `none` | recorded only; reserved for later controllers |
+| `--bench-lod-mode=none\|baseline` | `none` | `none` = baked scene, no LOD; `baseline` = distance LOD (`VegetationLod` node) |
 | `--bench-seed=N` | 1337 | seeds Godot's global RNG. The world is baked and does not depend on it |
 | `--bench-warmup=S` / `--bench-duration=S` | 10 / 60 | seconds |
 | `--bench-settle-frames=N` | 10 | frames held at the path start, not recorded |
@@ -31,7 +32,8 @@ Renderer and driver cannot be changed at runtime; use Godot's own flags (`--rend
 ## Phases
 startup (3 frames) -> warm-up (camera travels the path, not recorded) -> settle (camera held at path start)
 -> measure (path distance = elapsed wall time x speed). Warm-up ends with a teleport back to the start so
-every measured run covers exactly the same path from distance 0.
+every measured run covers exactly the same path from distance 0. In `baseline` mode the LOD state is also reset
+(`resync()`, no hysteresis, no switches counted) at that point, so the measured run does not depend on the warm-up.
 
 ## Repeatability
 The camera path (`benchmark_camera_path.gd`) is fixed waypoints -> Catmull-Rom -> 1 m samples, with height from the
@@ -63,10 +65,16 @@ are read at the start of the next frame and paired with the previous frame's pos
 | `draw_calls`, `primitives`, `objects` | count | `Performance.RENDER_TOTAL_*_IN_FRAME`: visible + shadow passes, all viewports |
 | `draw_calls_visible`, `primitives_visible` | count | `viewport_get_render_info(..., INFO_TYPE_VISIBLE)`: main camera pass only, excludes shadows |
 | `video_mem_mb` | MiB | `Performance.RENDER_VIDEO_MEM_USED`. Updates rarely; was constant in test runs |
-| `lod_switches`, `lod_bias` | count / unitless | **always empty in milestone 1** (no LOD controller); columns reserved so later CSVs share a layout |
+| `lod_switches` | count | trees that changed LOD level in the update that preceded the row's frame. `0` in `none` mode (no controller exists, so there are none) |
+| `lod_bias` | unitless | empty in both current modes (the baseline has no bias); reserved for the adaptive controller |
+| `lod_update_ms` | ms | CPU time of that LOD update (policy plus buffer writes), per frame. Empty in `none` mode |
+| `trees_lod0`, `trees_lod1`, `trees_lod2` | count | trees drawn at each mesh level (they sum to the tree total). In `none` mode all trees are at the baked level |
 
 Draw-call, primitive and GPU readings of 0 are stored as empty (a rendered scene cannot have zero); the JSON
 `summary.columns.<name>.available` says whether any sample existed.
+Level counts and switches are read at the start of the frame, so they describe the LOD state the previous frame
+was drawn with. `summary.lod_switches_total` and `lod.*` in the JSON hold the totals and the result of the two
+LOD integrity checks (after the warm-up resync and at the end of the run).
 `fps_1pct_low` is 1000 / p99 frame time (not the mean of the slowest 1 %). `avg_fps` is frames / measured seconds.
 
 ## Caveats

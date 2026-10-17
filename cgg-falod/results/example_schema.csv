@@ -1,4 +1,4 @@
-frame,t_s,path_distance_m,cam_x,cam_y,cam_z,cam_yaw_deg,frame_time_ms,fps_instant,process_ms_1hz,physics_ms_1hz,render_cpu_ms,render_gpu_ms,draw_calls,draw_calls_visible,primitives,primitives_visible,objects,video_mem_mb,lod_switches,lod_bias
-0,0.0188,0.0,235.0,15.6219,120.0,165.37,18.757,53.3134,20.463,0.284,1.607,18.192,1153,555,11597327,5088859,1223,305.1406,,
-1,0.0372,0.1501,234.9935,15.6247,120.1499,164.8999,18.458,54.1771,20.463,0.284,1.291,18.172,1162,559,11783727,5153723,1232,305.1406,,
-2,0.056,0.2977,234.9871,15.6276,120.2974,164.4373,18.825,53.1208,20.463,0.284,2.099,18.157,1165,561,11953793,5193557,1235,305.1406,,
+frame,t_s,path_distance_m,cam_x,cam_y,cam_z,cam_yaw_deg,frame_time_ms,fps_instant,process_ms_1hz,physics_ms_1hz,render_cpu_ms,render_gpu_ms,draw_calls,draw_calls_visible,primitives,primitives_visible,objects,video_mem_mb,lod_switches,lod_bias,lod_update_ms,trees_lod0,trees_lod1,trees_lod2
+0,0.0105,0.0,235.0,15.6219,120.0,165.37,10.507,95.1746,20.5,0.159,1.578,9.382,1291,585,3459519,1978477,1361,366.0156,0,,1.502,37,605,9174
+1,0.0206,0.0841,234.9964,15.6235,120.084,165.1066,10.049,99.5124,20.5,0.159,1.939,9.435,1298,587,3483175,1979885,1368,366.0156,0,,1.715,37,605,9174
+2,0.0306,0.1644,234.9929,15.625,120.1643,164.8548,10.018,99.8203,20.5,0.159,1.631,9.341,1298,588,3491747,1988581,1368,366.0156,0,,1.376,37,605,9174

@@ -21,7 +21,7 @@ const COLUMNS: PackedStringArray = [
 	"frame", "t_s", "path_distance_m", "cam_x", "cam_y", "cam_z", "cam_yaw_deg",
 	"frame_time_ms", "fps_instant", "process_ms_1hz", "physics_ms_1hz", "render_cpu_ms", "render_gpu_ms",
 	"draw_calls", "draw_calls_visible", "primitives", "primitives_visible", "objects", "video_mem_mb",
-	"lod_switches", "lod_bias",
+	"lod_switches", "lod_bias", "lod_update_ms", "trees_lod0", "trees_lod1", "trees_lod2",
 ]
 const STARTUP_FRAMES := 3
 const PROGRESS_INTERVAL_S := 10.0
@@ -42,6 +42,9 @@ var _start_unix: float = 0.0
 var _scene_info: Dictionary = {}
 var _display_info: Dictionary = {}
 var _aborted: bool = false
+var _lod: Node
+var _lod_verify_start: String = "not run"
+var _tree_instances: int = 0
 
 @onready var _environment: Node = $Environment
 @onready var _camera: Camera3D = $BenchmarkCamera
@@ -61,6 +64,8 @@ func _ready() -> void:
 		_fail("Environment has no Terrain3D node", 3)
 		return
 	_isolate_from_player()
+	if not _setup_lod():
+		return
 
 	_path = CameraPath.new()
 	var path_error: String = _path.build(terrain, _config.eye_height_m, _config.pitch_deg)
@@ -111,7 +116,11 @@ func _process(_delta: float) -> void:
 			if elapsed >= _config.warmup_s:
 				_apply_pose(0.0)
 				_enter_phase(Phase.SETTLE, now)
+				if _lod_active():
+					_lod.resync()  # same LOD state at the path start in every run, whatever the warm-up did
 		Phase.SETTLE:
+			if _frames_in_phase == 3 and _lod_active():
+				_lod_verify_start = _lod.verify()
 			if _frames_in_phase > _config.settle_frames:
 				_enter_phase(Phase.MEASURE, now)
 				_prev_tick_us = now
@@ -139,8 +148,7 @@ func _measure_frame(now: int) -> void:
 		counters["process_ms_1hz"], counters["physics_ms_1hz"], counters["render_cpu_ms"], counters["render_gpu_ms"],
 		counters["draw_calls"], counters["draw_calls_visible"], counters["primitives"],
 		counters["primitives_visible"], counters["objects"], counters["video_mem_mb"],
-		null, null,  # lod_switches, lod_bias: no LOD controller exists yet, so these are unavailable
-	]
+	] + _lod_columns()
 	_csv.add_row(row)
 	_measured_rows.append(row)
 	_prev_tick_us = now
@@ -153,6 +161,39 @@ func _measure_frame(now: int) -> void:
 	_prev_distance = elapsed_s * _config.speed_mps
 	_apply_pose(_prev_distance)
 	_prev_pose = _camera.global_transform
+
+
+## Picks the vegetation LOD mode of the instanced environment: "none" leaves the baked scene untouched.
+func _setup_lod() -> bool:
+	_lod = _environment.get_node_or_null("VegetationLod")
+	if _config.lod_mode == "baseline":
+		if _lod == null:
+			_fail("lod_mode=baseline but the environment has no VegetationLod node", 3)
+			return false
+		_lod.enabled = true
+	elif _lod != null:
+		_lod.enabled = false
+	return true
+
+
+func _lod_active() -> bool:
+	return _config.lod_mode == "baseline" and _lod != null
+
+
+## lod_switches (instances that changed level in the previous frame's update), lod_bias, lod_update_ms
+## (CPU time of that update), trees at each level. "none": no controller exists, so zero switches, no
+## update time (empty) and every tree stays at the baked level. lod_bias is empty in both modes. Level counts are read before this frame's update,
+## so they match the frame the row describes.
+func _lod_columns() -> Array:
+	var counts := PackedInt32Array([0, 0, 0])
+	if _lod_active():
+		counts = _lod.level_counts()
+		if counts.is_empty():
+			return [0, null, null, null, null, null]
+		return [_lod.frame_switches, null, _lod.last_update_ms, counts[0], counts[1], counts[2]]
+	var baked_level := clampi(int(_scene_info.get("tree_lod_level", 0)), 0, 2)
+	counts[baked_level] = _tree_instances
+	return [0, null, null, counts[0], counts[1], counts[2]]
 
 
 func _apply_pose(distance: float) -> void:
@@ -176,7 +217,7 @@ func _finish() -> void:
 		"aborted": _aborted,
 		"started_unix": _start_unix,
 		"config": _config.to_dict(),
-		"lod_controller": "none (milestone 1: no LOD is applied; lod_switches and lod_bias are unavailable)",
+		"lod": _lod_meta(),
 		"display": _display_info,
 		"engine": _engine_info(),
 		"scene": _scene_info,
@@ -204,9 +245,32 @@ func _finish() -> void:
 	for name in ["render_gpu_ms", "render_cpu_ms", "draw_calls", "primitives"]:
 		var stat: Dictionary = summary["columns"][name]
 		print("[bench] %s: %s" % [name, "mean %.2f" % stat["mean"] if stat["available"] else "UNAVAILABLE"])
+	if _lod_active():
+		print("[bench] lod: %d switches, integrity after resync: %s, at end: %s" % [
+				meta["lod"]["total_switches_in_measured_run"], _lod_verify_start if not _lod_verify_start.is_empty() else "ok",
+				"ok" if meta["lod"]["integrity_check_at_end"].is_empty() else meta["lod"]["integrity_check_at_end"]])
 	print("[bench] wrote %s.csv and .json (csv error=%s)" % [base, error_string(csv_error)])
 	if _config.quit_when_done:
 		get_tree().quit(0 if csv_error == OK and not _aborted else 1)
+
+
+func _lod_meta() -> Dictionary:
+	var meta := {"mode": _config.lod_mode}
+	if _lod_active():
+		meta.merge(_lod.describe())
+		meta["integrity_check_after_resync"] = _lod_verify_start
+		meta["integrity_check_at_end"] = _lod.verify()
+		meta["total_switches_in_measured_run"] = int(_sum_column("lod_switches"))
+	return meta
+
+
+func _sum_column(name: String) -> float:
+	var index := COLUMNS.find(name)
+	var total := 0.0
+	for row in _measured_rows:
+		if row[index] != null:
+			total += float(row[index])
+	return total
 
 
 func _fail(message: String, exit_code: int) -> void:
@@ -278,6 +342,7 @@ func _scene_fingerprint(terrain: Terrain3D) -> Dictionary:
 	var chunks := 0
 	var nodes := 0
 	var instances := 0
+	_tree_instances = 0
 	var vegetation := _environment.get_node_or_null("Vegetation")
 	if vegetation != null:
 		for chunk in vegetation.get_children():
@@ -287,6 +352,8 @@ func _scene_fingerprint(terrain: Terrain3D) -> Dictionary:
 				if multimesh_node != null and multimesh_node.multimesh != null:
 					nodes += 1
 					instances += multimesh_node.multimesh.instance_count
+					if multimesh_node.get_meta("vegetation_kind", "") == "tree":
+						_tree_instances += multimesh_node.multimesh.instance_count
 	return {
 		"scene": _environment.scene_file_path,
 		"world_seed": _environment.get("world_seed"),
@@ -295,6 +362,7 @@ func _scene_fingerprint(terrain: Terrain3D) -> Dictionary:
 		"vegetation_chunks": chunks,
 		"vegetation_multimesh_nodes": nodes,
 		"vegetation_instances": instances,
+		"tree_instances": _tree_instances,
 	}
 
 
