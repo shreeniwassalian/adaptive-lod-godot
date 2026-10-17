@@ -22,6 +22,7 @@ const COLUMNS: PackedStringArray = [
 	"frame_time_ms", "fps_instant", "process_ms_1hz", "physics_ms_1hz", "render_cpu_ms", "render_gpu_ms",
 	"draw_calls", "draw_calls_visible", "primitives", "primitives_visible", "objects", "video_mem_mb",
 	"lod_switches", "lod_bias", "lod_update_ms", "trees_lod0", "trees_lod1", "trees_lod2",
+	"grass_clumps_t0", "grass_clumps_t1", "grass_clumps_t2", "grass_switches", "grass_update_ms",
 ]
 const STARTUP_FRAMES := 3
 const PROGRESS_INTERVAL_S := 10.0
@@ -43,8 +44,11 @@ var _scene_info: Dictionary = {}
 var _display_info: Dictionary = {}
 var _aborted: bool = false
 var _lod: Node
+var _grass: Node
+var _grass_verify_start: String = "not run"
 var _lod_verify_start: String = "not run"
 var _tree_instances: int = 0
+var _debug_panel_removed: bool = false
 
 @onready var _environment: Node = $Environment
 @onready var _camera: Camera3D = $BenchmarkCamera
@@ -65,6 +69,8 @@ func _ready() -> void:
 		return
 	_isolate_from_player()
 	if not _setup_lod():
+		return
+	if not _setup_grass():
 		return
 
 	_path = CameraPath.new()
@@ -118,9 +124,13 @@ func _process(_delta: float) -> void:
 				_enter_phase(Phase.SETTLE, now)
 				if _lod_active():
 					_lod.resync()  # same LOD state at the path start in every run, whatever the warm-up did
+				if _grass_lod_active():
+					_grass.resync()
 		Phase.SETTLE:
 			if _frames_in_phase == 3 and _lod_active():
 				_lod_verify_start = _lod.verify()
+			if _frames_in_phase == 3 and _grass != null:
+				_grass_verify_start = _grass.verify()
 			if _frames_in_phase > _config.settle_frames:
 				_enter_phase(Phase.MEASURE, now)
 				_prev_tick_us = now
@@ -148,7 +158,7 @@ func _measure_frame(now: int) -> void:
 		counters["process_ms_1hz"], counters["physics_ms_1hz"], counters["render_cpu_ms"], counters["render_gpu_ms"],
 		counters["draw_calls"], counters["draw_calls_visible"], counters["primitives"],
 		counters["primitives_visible"], counters["objects"], counters["video_mem_mb"],
-	] + _lod_columns()
+	] + _lod_columns() + _grass_columns()
 	_csv.add_row(row)
 	_measured_rows.append(row)
 	_prev_tick_us = now
@@ -178,6 +188,34 @@ func _setup_lod() -> bool:
 
 func _lod_active() -> bool:
 	return _config.lod_mode == "baseline" and _lod != null
+
+
+## Applies --bench-grass / --bench-grass-lod to the environment's GrassLod node.
+func _setup_grass() -> bool:
+	_grass = _environment.get_node_or_null("GrassLod")
+	if _grass == null:
+		if _config.grass_style == "v2":
+			_fail("grass=v2 but the environment has no GrassLod node", 3)
+			return false
+		return true
+	_grass.style = 1 if _config.grass_style == "v2" else 0
+	_grass.lod_enabled = _config.grass_lod == "distance"
+	return true
+
+
+func _grass_lod_active() -> bool:
+	return _grass != null and _config.grass_style == "v2" and _config.grass_lod == "distance"
+
+
+## grass_clumps_t0..t2 (clumps drawn at each tier; legacy tufts count as t0), grass_switches (cells that
+## changed tier in the previous frame's update), grass_update_ms (empty unless grass LOD is on).
+func _grass_columns() -> Array:
+	if _grass == null:
+		return [null, null, null, null, null]
+	var clumps: PackedInt32Array = _grass.tier_clump_counts()
+	if _grass_lod_active():
+		return [clumps[0], clumps[1], clumps[2], _grass.frame_switches, _grass.last_update_ms]
+	return [clumps[0], clumps[1], clumps[2], 0, null]
 
 
 ## lod_switches (instances that changed level in the previous frame's update), lod_bias, lod_update_ms
@@ -218,6 +256,8 @@ func _finish() -> void:
 		"started_unix": _start_unix,
 		"config": _config.to_dict(),
 		"lod": _lod_meta(),
+		"grass": _grass_meta(),
+		"debug_panel_removed": _debug_panel_removed,
 		"display": _display_info,
 		"engine": _engine_info(),
 		"scene": _scene_info,
@@ -254,6 +294,16 @@ func _finish() -> void:
 		get_tree().quit(0 if csv_error == OK and not _aborted else 1)
 
 
+func _grass_meta() -> Dictionary:
+	if _grass == null:
+		return {"style": "legacy", "note": "no GrassLod node"}
+	var meta: Dictionary = _grass.describe()
+	meta["integrity_check_after_resync"] = _grass_verify_start
+	meta["integrity_check_at_end"] = _grass.verify()
+	meta["total_switches_in_measured_run"] = int(_sum_column("grass_switches"))
+	return meta
+
+
 func _lod_meta() -> Dictionary:
 	var meta := {"mode": _config.lod_mode}
 	if _lod_active():
@@ -284,6 +334,11 @@ func _fail(message: String, exit_code: int) -> void:
 func _isolate_from_player() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_environment.set_process_unhandled_input(false)  # F1 free-fly toggle
+	var debug_panel := _environment.get_node_or_null("LodDebugPanel")  # F3/F4 UI must not touch benchmark runs
+	if debug_panel != null:
+		_environment.remove_child(debug_panel)
+		debug_panel.free()
+		_debug_panel_removed = true
 	var player := _environment.get_node_or_null("Player") as Node3D
 	if player != null:
 		player.process_mode = Node.PROCESS_MODE_DISABLED

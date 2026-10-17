@@ -10,11 +10,14 @@ extends Node
 ##
 ## Disabled (enabled = false) the baked scene is left untouched, which is the "no LOD" reference.
 ## The MultiMesh levels are built on the first enabled frame, so toggling `enabled` before then is free.
+## Disabling after that restores every tree to level 0 (the baked mesh); enabling again resyncs from the
+## camera. Neither the restore nor the resync counts as LOD switches.
 
 const TreeMeshes := preload("res://scripts/world/tree_meshes.gd")
 const VegetationLodSet := preload("res://scripts/lod/vegetation_lod_set.gd")
 
-@export var enabled: bool = true
+@export var enabled: bool = true:
+	set = set_enabled
 @export var vegetation_path: NodePath = ^"../Vegetation"
 @export_group("Distances")
 ## Distance in metres at which trees change from level 0 to level 1.
@@ -31,6 +34,8 @@ var total_switches: int = 0
 var last_update_ms: float = 0.0
 
 var _lod_set: RefCounted
+var _resync_pending: bool = true
+var _baked_tree_count: int = -1
 var _thresholds := PackedFloat32Array()
 var _up_sq := PackedFloat32Array()
 var _down_sq := PackedFloat32Array()
@@ -44,9 +49,23 @@ func is_built() -> bool:
 	return _lod_set != null
 
 
-## Instances currently drawn at each level (empty before the first enabled frame).
+func set_enabled(value: bool) -> void:
+	if value == enabled:
+		return
+	enabled = value
+	_resync_pending = true
+	if not enabled and _lod_set != null:
+		var started := Time.get_ticks_usec()
+		_lod_set.restore_baked()
+		frame_switches = 0
+		print("[lod] disabled: baked vegetation restored in %.0f ms" % ((Time.get_ticks_usec() - started) / 1000.0))
+
+
+## Trees currently drawn at each level. Before the levels are built every tree is at level 0 (baked).
 func level_counts() -> PackedInt32Array:
-	return _lod_set.totals.duplicate() if _lod_set != null else PackedInt32Array()
+	if _lod_set != null:
+		return _lod_set.totals.duplicate()
+	return PackedInt32Array([_count_baked_trees(), 0, 0])
 
 
 func describe() -> Dictionary:
@@ -86,15 +105,15 @@ func resync() -> void:
 func _process(_delta: float) -> void:
 	if not enabled:
 		return
-	var fresh := _lod_set == null
 	if not _prepare():
 		enabled = false
 		return
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
 		return
-	if fresh:
+	if _resync_pending:
 		resync()
+		_resync_pending = false
 	_update(camera.global_position)
 
 
@@ -186,6 +205,19 @@ func _prepare() -> bool:
 			_lod_set.multimesh_nodes_added, lod1_distance, lod2_distance, hysteresis,
 			camera.get_path() if camera != null else "none"])
 	return true
+
+
+func _count_baked_trees() -> int:
+	if _baked_tree_count < 0:
+		_baked_tree_count = 0
+		var vegetation := get_node_or_null(vegetation_path)
+		if vegetation != null:
+			for chunk in vegetation.get_children():
+				for child in chunk.get_children():
+					var node := child as MultiMeshInstance3D
+					if node != null and node.multimesh != null and node.get_meta("vegetation_kind", "") == "tree":
+						_baked_tree_count += node.multimesh.instance_count
+	return _baked_tree_count
 
 
 func _make_mesh(species: String, level: int) -> Mesh:

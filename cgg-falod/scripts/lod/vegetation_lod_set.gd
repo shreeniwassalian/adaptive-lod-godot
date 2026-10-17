@@ -128,6 +128,18 @@ func set_level(group: Group, id: int, new_level: int) -> void:
 		total_switches += 1
 
 
+## Puts every tree back at level 0 (the baked mesh) without counting switches. Level 1 and 2 nodes end up hidden.
+func restore_baked() -> void:
+	begin_frame()
+	count_switches = false
+	for chunk in chunks:
+		for group in chunk.groups:
+			for i in group.count:
+				set_level(group, i, 0)
+		chunk.uniform_level = 0
+	end_frame()
+
+
 ## Checks the invariants: every instance in exactly one level, buffers hold the original transform,
 ## visible counts match, totals match, and the collision bodies are unchanged. Returns "" when all hold.
 func verify() -> String:

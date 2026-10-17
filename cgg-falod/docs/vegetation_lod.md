@@ -33,7 +33,20 @@ The defaults are a first choice for ~16 m / ~12 m trees; they have not been tune
 Uses `get_viewport().get_camera_3d()`: the player camera in normal play, the free-fly camera after F1, the scripted
 camera in the benchmark. It reads no input.
 
+## Debug panel (F3)
+`scripts/ui/lod_debug_panel.gd` (node `LodDebugPanel` in the environment scene). F3 shows or hides it; F4 switches mode
+without the mouse. Hidden by default and idle while hidden. While shown the cursor is released (so the buttons work) and
+hiding recaptures it if it was captured. It shows the mode, FPS and frame time (smoothed over the recent frames, not the
+benchmark's per-frame values), trees at LOD0/1/2 and their total, the cumulative LOD switches (+ last frame), thresholds,
+hysteresis and the LOD update cost.
+- **None** disables `VegetationLod`: every tree is moved back to level 0 (the baked mesh), levels 1 and 2 are hidden,
+  and the controller stops updating. **Baseline** enables it again and resyncs from the camera. Neither the restore nor the
+  resync counts as LOD switches, so the switch counter only reflects movement. Each switch takes about 20 ms once.
+- The panel only drives and reads the existing controller; there is no second controller. The benchmark runner removes
+  the panel node at start, so it never takes part in a benchmark run.
+- `results/.gdignore` stops the editor importing benchmark CSVs as translations.
+
 ## Tests
-`Godot_console.exe --path . --script res://scripts/lod/lod_selftest.gd [-- nolod] [-- shots=<dir>]` (needs a real
-renderer): follows the player camera, moves the player, checks integrity (`verify()`: every tree drawn once, original
+`Godot_console.exe --path . --script res://scripts/lod/lod_selftest.gd [-- nolod|restored] [-- shots=<dir>]` (needs a real
+renderer): drives the debug panel (F3/F4, buttons, displayed numbers, mode round trips), follows the player camera, moves the player, checks integrity (`verify()`: every tree drawn once, original
 transforms, counts, collision bodies unchanged), compares trunk raycasts across LOD changes, and walks the benchmark path.

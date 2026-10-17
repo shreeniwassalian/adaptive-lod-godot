@@ -16,6 +16,8 @@ with exit code 2. A finished run exits 0 (1 if the CSV could not be written or t
 |---|---|---|
 | `--bench-label=NAME` | `no_lod` | file-name prefix, recorded in metadata |
 | `--bench-lod-mode=none\|baseline` | `none` | `none` = baked scene, no LOD; `baseline` = distance LOD (`VegetationLod` node) |
+| `--bench-grass=legacy\|v2` | `legacy` | `legacy` = the original sparse tufts (the earlier reference), `v2` = procedural grass field (`docs/grass.md`) |
+| `--bench-grass-lod=off\|distance` | `off` | v2 only: `off` = every cell at full detail, `distance` = per-cell distance tiers |
 | `--bench-seed=N` | 1337 | seeds Godot's global RNG. The world is baked and does not depend on it |
 | `--bench-warmup=S` / `--bench-duration=S` | 10 / 60 | seconds |
 | `--bench-settle-frames=N` | 10 | frames held at the path start, not recorded |
@@ -72,6 +74,10 @@ are read at the start of the next frame and paired with the previous frame's pos
 
 Draw-call, primitive and GPU readings of 0 are stored as empty (a rendered scene cannot have zero); the JSON
 `summary.columns.<name>.available` says whether any sample existed.
+| `grass_clumps_t0`, `grass_clumps_t1`, `grass_clumps_t2` | count | grass clumps drawn at each tier (legacy tufts count as t0) |
+| `grass_switches` | count | grass cells that changed tier in the update that preceded the row's frame; `0` when grass LOD is off, empty with no GrassLod node |
+| `grass_update_ms` | ms | CPU time of that grass update. Empty unless grass LOD is on |
+
 Level counts and switches are read at the start of the frame, so they describe the LOD state the previous frame
 was drawn with. `summary.lod_switches_total` and `lod.*` in the JSON hold the totals and the result of the two
 LOD integrity checks (after the warm-up resync and at the end of the run).

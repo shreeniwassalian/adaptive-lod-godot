@@ -6,6 +6,7 @@ const STAT_COLUMNS := [
 	"frame_time_ms", "process_ms_1hz", "physics_ms_1hz", "render_cpu_ms", "render_gpu_ms",
 	"draw_calls", "draw_calls_visible", "primitives", "primitives_visible", "objects", "video_mem_mb",
 	"lod_switches", "lod_bias", "lod_update_ms", "trees_lod0", "trees_lod1", "trees_lod2",
+	"grass_clumps_t0", "grass_clumps_t1", "grass_clumps_t2", "grass_switches", "grass_update_ms",
 ]
 ## Frames slower than this count as hitches.
 const HITCH_MS := 33.4

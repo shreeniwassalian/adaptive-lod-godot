@@ -5,11 +5,17 @@ extends RefCounted
 
 const VSYNC_MODES := ["off", "on", "adaptive", "mailbox"]
 const LOD_MODES := ["none", "baseline"]
+const GRASS_STYLES := ["legacy", "v2"]
+const GRASS_LOD_MODES := ["off", "distance"]
 
 ## Names the run in the output file names and the metadata.
 var label: String = "no_lod"
 ## Vegetation LOD mode, one of LOD_MODES: "none" leaves the baked scene as is (reference run).
 var lod_mode: String = "none"
+## Grass: "legacy" = the original sparse tufts (reference), "v2" = the procedural grass field.
+var grass_style: String = "legacy"
+## "off" = every v2 cell at full detail, "distance" = per-cell distance tiers. Ignored for legacy grass.
+var grass_lod: String = "off"
 ## Seeds Godot's global RNG at start. The world itself is baked and does not depend on it
 ## (its own seed is read from the scene and recorded as world_seed).
 var seed_value: int = 1337
@@ -54,6 +60,8 @@ func _apply(key: String, value: String) -> void:
 	match key:
 		"label": label = value
 		"lod-mode": lod_mode = value
+		"grass": grass_style = value
+		"grass-lod": grass_lod = value
 		"seed": seed_value = _int(key, value)
 		"warmup": warmup_s = _float(key, value)
 		"settle-frames": settle_frames = _int(key, value)
@@ -90,6 +98,10 @@ func _validate() -> void:
 		errors.append("--bench-vsync must be one of %s, got '%s'" % [VSYNC_MODES, vsync])
 	if not LOD_MODES.has(lod_mode):
 		errors.append("--bench-lod-mode must be one of %s, got '%s'" % [LOD_MODES, lod_mode])
+	if not GRASS_STYLES.has(grass_style):
+		errors.append("--bench-grass must be one of %s, got '%s'" % [GRASS_STYLES, grass_style])
+	if not GRASS_LOD_MODES.has(grass_lod):
+		errors.append("--bench-grass-lod must be one of %s, got '%s'" % [GRASS_LOD_MODES, grass_lod])
 	if duration_s <= 0.0 or warmup_s < 0.0 or speed_mps <= 0.0:
 		errors.append("duration and speed must be > 0, warmup >= 0")
 	if width < 320 or height < 240:
@@ -102,7 +114,7 @@ func _validate() -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"label": label, "lod_mode": lod_mode, "seed": seed_value, "warmup_s": warmup_s,
+		"label": label, "lod_mode": lod_mode, "grass_style": grass_style, "grass_lod": grass_lod, "seed": seed_value, "warmup_s": warmup_s,
 		"settle_frames": settle_frames, "duration_s": duration_s, "speed_mps": speed_mps,
 		"eye_height_m": eye_height_m, "pitch_deg": pitch_deg, "fov_deg": fov_deg,
 		"requested_width": width, "requested_height": height, "vsync": vsync, "max_fps": max_fps,

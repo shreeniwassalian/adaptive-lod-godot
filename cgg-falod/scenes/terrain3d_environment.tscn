@@ -8,6 +8,9 @@
 [ext_resource type="Script" path="res://scripts/env/free_fly_camera.gd" id="5_fly"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="6_player"]
 [ext_resource type="Script" path="res://scripts/lod/baseline_lod.gd" id="7_lod"]
+[ext_resource type="Script" path="res://scripts/ui/lod_debug_panel.gd" id="8_panel"]
+[ext_resource type="PackedScene" path="res://scenes/generated/grass.scn" id="9_grass"]
+[ext_resource type="Script" path="res://scripts/lod/grass_lod.gd" id="10_grasslod"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
 sky_top_color = Color(0.22, 0.42, 0.74, 1)
@@ -118,5 +121,13 @@ script = ExtResource("5_6nipn")
 
 [node name="Vegetation" type="Node3D" parent="." unique_id=1706231426 instance=ExtResource("4_m7x6x")]
 
+[node name="GrassField" parent="." instance=ExtResource("9_grass")]
+
 [node name="VegetationLod" type="Node" parent="."]
 script = ExtResource("7_lod")
+
+[node name="LodDebugPanel" type="CanvasLayer" parent="."]
+script = ExtResource("8_panel")
+
+[node name="GrassLod" type="Node" parent="."]
+script = ExtResource("10_grasslod")
