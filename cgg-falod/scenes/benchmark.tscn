@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/bench/benchmark_runner.gd" id="1_runner"]
+[ext_resource type="PackedScene" path="res://scenes/terrain3d_environment.tscn" id="2_env"]
+
+[node name="Benchmark" type="Node"]
+script = ExtResource("1_runner")
+
+[node name="Environment" parent="." instance=ExtResource("2_env")]
+
+[node name="BenchmarkCamera" type="Camera3D" parent="."]
+far = 3000.0
