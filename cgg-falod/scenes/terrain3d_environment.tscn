@@ -11,6 +11,9 @@
 [ext_resource type="Script" path="res://scripts/ui/lod_debug_panel.gd" id="8_panel"]
 [ext_resource type="PackedScene" path="res://scenes/generated/grass.scn" id="9_grass"]
 [ext_resource type="Script" path="res://scripts/lod/grass_lod.gd" id="10_grasslod"]
+[ext_resource type="Script" path="res://scripts/lod/density_lod.gd" id="11_density"]
+[ext_resource type="Script" path="res://scripts/lod/lod_manager.gd" id="12_manager"]
+[ext_resource type="Script" path="res://scripts/lod/adaptive_lod.gd" id="13_adaptive"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
 sky_top_color = Color(0.22, 0.42, 0.74, 1)
@@ -131,3 +134,31 @@ script = ExtResource("8_panel")
 
 [node name="GrassLod" type="Node" parent="."]
 script = ExtResource("10_grasslod")
+
+[node name="BushLod" type="Node" parent="."]
+script = ExtResource("11_density")
+kind = "bush"
+category_name = "bushes"
+process_order = -48
+tier_distances = PackedFloat32Array(50, 100, 160)
+tier_densities = PackedFloat32Array(1, 0.6, 0.3, 0.1)
+cull_distance = 240.0
+hysteresis = 8.0
+bounds_pad = 2.0
+
+[node name="DebrisLod" type="Node" parent="."]
+script = ExtResource("11_density")
+kind = "debris"
+category_name = "debris"
+process_order = -47
+tier_distances = PackedFloat32Array(30, 60)
+tier_densities = PackedFloat32Array(1, 0.5, 0.2)
+cull_distance = 110.0
+hysteresis = 5.0
+bounds_pad = 1.0
+
+[node name="LodManager" type="Node" parent="."]
+script = ExtResource("12_manager")
+
+[node name="AdaptiveLod" type="Node" parent="."]
+script = ExtResource("13_adaptive")

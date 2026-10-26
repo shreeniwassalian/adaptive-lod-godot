@@ -34,7 +34,7 @@ Uses `get_viewport().get_camera_3d()`: the player camera in normal play, the fre
 camera in the benchmark. It reads no input.
 
 ## Debug panel (F3)
-`scripts/ui/lod_debug_panel.gd` (node `LodDebugPanel` in the environment scene). F3 shows or hides it; F4 switches mode
+`scripts/ui/lod_debug_panel.gd` (node `LodDebugPanel` in the environment scene). F3 shows or hides it; F4 toggles None and Adaptive
 without the mouse. Hidden by default and idle while hidden. While shown the cursor is released (so the buttons work) and
 hiding recaptures it if it was captured. It shows the mode, FPS and frame time (smoothed over the recent frames, not the
 benchmark's per-frame values), trees at LOD0/1/2 and their total, the cumulative LOD switches (+ last frame), thresholds,
@@ -50,3 +50,6 @@ hysteresis and the LOD update cost.
 `Godot_console.exe --path . --script res://scripts/lod/lod_selftest.gd [-- nolod|restored] [-- shots=<dir>]` (needs a real
 renderer): drives the debug panel (F3/F4, buttons, displayed numbers, mode round trips), follows the player camera, moves the player, checks integrity (`verify()`: every tree drawn once, original
 transforms, counts, collision bodies unchanged), compares trunk raycasts across LOD changes, and walks the benchmark path.
+
+## Later milestones
+The tree policy now also runs inside the multi-category set (`docs/multi_category_lod.md`) and can be driven by the PI controller (`docs/adaptive_lod.md`); the behaviour described above is unchanged when bias is 0 and no schedule is set.

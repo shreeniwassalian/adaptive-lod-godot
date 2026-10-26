@@ -12,8 +12,14 @@ const CameraPath := preload("res://scripts/bench/benchmark_camera_path.gd")
 const MetricsSampler := preload("res://scripts/bench/metrics_sampler.gd")
 const CsvLogger := preload("res://scripts/bench/csv_logger.gd")
 const BenchmarkSummary := preload("res://scripts/bench/benchmark_summary.gd")
+const VegetationCounts := preload("res://scripts/lod/vegetation_counts.gd")
 
 enum Phase { STARTUP, WARMUP, SETTLE, MEASURE, DONE }
+
+## Version of the CSV/JSON layout, written to the JSON as csv_schema_version.
+## 1 = harness + trees, 2 = + grass columns, 3 = + bush/debris/rock columns and lod_total_update_ms,
+## 4 = + adaptive controller columns (ctrl_*), lod_policies_updated; lod_bias is now filled in adaptive mode.
+const CSV_SCHEMA_VERSION := 4
 
 ## One row per measured frame. Units are in docs/benchmark.md. Every row describes the frame that was
 ## just completed: pose = what was rendered, frame_time_ms = its duration, counters = its render stats.
@@ -23,6 +29,10 @@ const COLUMNS: PackedStringArray = [
 	"draw_calls", "draw_calls_visible", "primitives", "primitives_visible", "objects", "video_mem_mb",
 	"lod_switches", "lod_bias", "lod_update_ms", "trees_lod0", "trees_lod1", "trees_lod2",
 	"grass_clumps_t0", "grass_clumps_t1", "grass_clumps_t2", "grass_switches", "grass_update_ms",
+	"bush_drawn", "bush_switches", "bush_update_ms", "debris_drawn", "debris_switches", "debris_update_ms",
+	"rocks_instances", "lod_total_update_ms",
+	"lod_policies_updated", "ctrl_signal", "ctrl_signal_ms", "ctrl_raw_ms", "ctrl_target_ms", "ctrl_error",
+	"ctrl_p_term", "ctrl_i_term", "ctrl_update_ms",
 ]
 const STARTUP_FRAMES := 3
 const PROGRESS_INTERVAL_S := 10.0
@@ -43,10 +53,17 @@ var _start_unix: float = 0.0
 var _scene_info: Dictionary = {}
 var _display_info: Dictionary = {}
 var _aborted: bool = false
-var _lod: Node
+var _manager: Node
+var _lod: Node  # tree policy
 var _grass: Node
-var _grass_verify_start: String = "not run"
-var _lod_verify_start: String = "not run"
+var _bush: Node
+var _debris: Node
+var _adaptive: Node
+var _updates_seen: Dictionary = {}
+var _init_costs: Dictionary = {}
+var _measure_start: Dictionary = {}
+var _display_at_end: Dictionary = {}
+var _verify_start: Dictionary = {}
 var _tree_instances: int = 0
 var _debug_panel_removed: bool = false
 
@@ -70,8 +87,6 @@ func _ready() -> void:
 	_isolate_from_player()
 	if not _setup_lod():
 		return
-	if not _setup_grass():
-		return
 
 	_path = CameraPath.new()
 	var path_error: String = _path.build(terrain, _config.eye_height_m, _config.pitch_deg)
@@ -93,6 +108,10 @@ func _ready() -> void:
 			_config.label, _config.lod_mode, _config.seed_value, _scene_info.get("world_seed")])
 	print("[bench] path length=%.1f m points=%d ground=%.1f..%.1f m sha256=%s" % [
 			_path.length, _path.point_count(), _path.ground_min, _path.ground_max, _path.sha256.substr(0, 16)])
+	if _config.lod_mode == "adaptive":
+		print("[bench] adaptive: target=%.2f ms signal=%s kp=%.2f ki=%.2f bias=[%.2f,%.2f] ctrl interval=%.2f s policy interval=%.2f s" % [
+				_config.target_ms, _config.signal_source, _config.kp, _config.ki, _config.bias_min, _config.bias_max,
+				_config.controller_interval_s, _config.policy_interval_s])
 	print("[bench] window=%s vsync=%s max_fps=%d renderer=%s/%s adapter=%s" % [
 			_display_info["window_size"], _config.vsync, _config.max_fps,
 			_display_info["rendering_method"], _display_info["rendering_driver"], _display_info["adapter"]])
@@ -122,17 +141,14 @@ func _process(_delta: float) -> void:
 			if elapsed >= _config.warmup_s:
 				_apply_pose(0.0)
 				_enter_phase(Phase.SETTLE, now)
-				if _lod_active():
-					_lod.resync()  # same LOD state at the path start in every run, whatever the warm-up did
-				if _grass_lod_active():
-					_grass.resync()
+				_reset_lod_state()  # same LOD state at the path start in every run, whatever the warm-up did
 		Phase.SETTLE:
-			if _frames_in_phase == 3 and _lod_active():
-				_lod_verify_start = _lod.verify()
-			if _frames_in_phase == 3 and _grass != null:
-				_grass_verify_start = _grass.verify()
+			if _frames_in_phase == 3:
+				for p in _manager.policies():
+					_verify_start[p.category()] = p.verify() if p.enabled and p.is_built() else "not active"
 			if _frames_in_phase > _config.settle_frames:
 				_enter_phase(Phase.MEASURE, now)
+				_begin_measurement()
 				_prev_tick_us = now
 				_prev_distance = 0.0
 				_prev_pose = _camera.global_transform
@@ -158,7 +174,7 @@ func _measure_frame(now: int) -> void:
 		counters["process_ms_1hz"], counters["physics_ms_1hz"], counters["render_cpu_ms"], counters["render_gpu_ms"],
 		counters["draw_calls"], counters["draw_calls_visible"], counters["primitives"],
 		counters["primitives_visible"], counters["objects"], counters["video_mem_mb"],
-	] + _lod_columns() + _grass_columns()
+	] + _lod_columns() + _grass_columns() + _object_columns() + _controller_columns()
 	_csv.add_row(row)
 	_measured_rows.append(row)
 	_prev_tick_us = now
@@ -173,54 +189,121 @@ func _measure_frame(now: int) -> void:
 	_prev_pose = _camera.global_transform
 
 
-## Picks the vegetation LOD mode of the instanced environment: "none" leaves the baked scene untouched.
+## Picks the LOD mode of the instanced environment through its LodManager: "none" disables every category
+## policy (baked scene, grass at full detail), "baseline" enables the policies of --bench-lod-categories.
 func _setup_lod() -> bool:
-	_lod = _environment.get_node_or_null("VegetationLod")
-	if _config.lod_mode == "baseline":
-		if _lod == null:
-			_fail("lod_mode=baseline but the environment has no VegetationLod node", 3)
-			return false
-		_lod.enabled = true
-	elif _lod != null:
-		_lod.enabled = false
+	_manager = _environment.get_node_or_null("LodManager")
+	if _manager == null:
+		_fail("the environment has no LodManager node", 3)
+		return false
+	_lod = _manager.policy("trees")
+	_grass = _manager.policy("grass")
+	_bush = _manager.policy("bushes")
+	_debris = _manager.policy("debris")
+	if _lod == null or _grass == null or _bush == null or _debris == null:
+		_fail("the environment is missing a category LOD policy (%s)" % _manager.categories(), 3)
+		return false
+	_adaptive = _manager.adaptive()
+	if _config.lod_mode == "adaptive" and _adaptive == null:
+		_fail("the environment has no AdaptiveLod node", 3)
+		return false
+	var wanted: PackedStringArray = _config.lod_categories if _config.lod_mode != "none" else PackedStringArray()
+	_manager.set_categories(wanted)
+	_grass.style = 1 if _config.grass_style == "v2" else 0
+	if _config.lod_mode == "adaptive":
+		_configure_adaptive()
+		_adaptive.activate()
 	return true
+
+
+## Copies the controller settings of the run into the AdaptiveLod node. The benchmark's sampler already measures
+## GPU render time, so the controller does not manage that itself.
+func _configure_adaptive() -> void:
+	_adaptive.target_ms = _config.target_ms
+	_adaptive.signal_source = _config.signal_source
+	_adaptive.kp = _config.kp
+	_adaptive.ki = _config.ki
+	_adaptive.bias_min = _config.bias_min
+	_adaptive.bias_max = _config.bias_max
+	_adaptive.update_interval_s = _config.controller_interval_s
+	_adaptive.smoothing_s = _config.smoothing_s
+	_adaptive.max_rise_per_update = _config.max_rise
+	_adaptive.max_fall_per_update = _config.max_fall
+	_adaptive.policy_update_interval_s = _config.policy_interval_s
+	_adaptive.manage_measurement = false
+	if _config.switch_budget >= 0:
+		var budgets := {}
+		for category in _manager.categories():
+			budgets[category] = _config.switch_budget
+		_adaptive.max_changes_per_update = budgets
+
+
+func _adaptive_active() -> bool:
+	return _adaptive != null and _adaptive.is_active() and _config.lod_mode == "adaptive"
+
+
+## Warm-up -> settle: controller back to bias 0 and held, every category resynced from the path start. The time the
+## resync takes is recorded per category (initialisation, not steady-state cost).
+func _reset_lod_state() -> void:
+	if _adaptive_active():
+		_adaptive.hold = true
+		_adaptive.reset()
+	for p in _manager.policies():
+		if p.enabled:
+			var started := Time.get_ticks_usec()
+			p.resync()
+			_init_costs[p.category()] = {"resync_ms": (Time.get_ticks_usec() - started) / 1000.0}
+
+
+## Settle -> measure: the controller starts the measured run from its reset state, and the counters reported for the
+## measured window are taken relative to now.
+func _begin_measurement() -> void:
+	if _adaptive_active():
+		_adaptive.reset()
+		_adaptive.hold = false
+	for p in _manager.policies():
+		_updates_seen[p.category()] = p.updates_run
+		_measure_start[p.category()] = {"updates_run": p.updates_run, "total_update_ms": p.total_update_ms}
 
 
 func _lod_active() -> bool:
-	return _config.lod_mode == "baseline" and _lod != null
+	return _lod != null and _lod.enabled
 
 
-## Applies --bench-grass / --bench-grass-lod to the environment's GrassLod node.
-func _setup_grass() -> bool:
-	_grass = _environment.get_node_or_null("GrassLod")
-	if _grass == null:
-		if _config.grass_style == "v2":
-			_fail("grass=v2 but the environment has no GrassLod node", 3)
-			return false
-		return true
-	_grass.style = 1 if _config.grass_style == "v2" else 0
-	_grass.lod_enabled = _config.grass_lod == "distance"
-	return true
-
-
+## Grass tiers only exist for the v2 field; legacy grass has no policy to run.
 func _grass_lod_active() -> bool:
-	return _grass != null and _config.grass_style == "v2" and _config.grass_lod == "distance"
+	return _grass != null and _grass.enabled and _config.grass_style == "v2"
 
 
 ## grass_clumps_t0..t2 (clumps drawn at each tier; legacy tufts count as t0), grass_switches (cells that
 ## changed tier in the previous frame's update), grass_update_ms (empty unless grass LOD is on).
 func _grass_columns() -> Array:
-	if _grass == null:
-		return [null, null, null, null, null]
 	var clumps: PackedInt32Array = _grass.tier_clump_counts()
 	if _grass_lod_active():
 		return [clumps[0], clumps[1], clumps[2], _grass.frame_switches, _grass.last_update_ms]
 	return [clumps[0], clumps[1], clumps[2], 0, null]
 
 
+## bush_drawn / debris_drawn (instances drawn), *_switches (chunks that changed density tier in the previous frame's
+## update, 0 when the policy is off), *_update_ms (empty when off), rocks_instances (constant: no rock LOD exists),
+## lod_total_update_ms (sum of the update costs of all active policies; empty when none is active).
+func _object_columns() -> Array:
+	var total_ms := 0.0
+	var any := false
+	for p in _manager.policies():
+		if p.enabled and p.is_built() and (p != _grass or _grass_lod_active()):
+			total_ms += p.last_update_ms
+			any = true
+	return [
+		_bush.instance_drawn(), _bush.frame_switches if _bush.enabled else 0, _bush.last_update_ms if _bush.enabled else null,
+		_debris.instance_drawn(), _debris.frame_switches if _debris.enabled else 0, _debris.last_update_ms if _debris.enabled else null,
+		_manager.rock_instances(), total_ms if any else null,
+	]
+
+
 ## lod_switches (instances that changed level in the previous frame's update), lod_bias, lod_update_ms
 ## (CPU time of that update), trees at each level. "none": no controller exists, so zero switches, no
-## update time (empty) and every tree stays at the baked level. lod_bias is empty in both modes. Level counts are read before this frame's update,
+## update time (empty) and every tree stays at the baked level. lod_bias is the global controller bias in adaptive mode and empty otherwise. Level counts are read before this frame's update,
 ## so they match the frame the row describes.
 func _lod_columns() -> Array:
 	var counts := PackedInt32Array([0, 0, 0])
@@ -228,10 +311,31 @@ func _lod_columns() -> Array:
 		counts = _lod.level_counts()
 		if counts.is_empty():
 			return [0, null, null, null, null, null]
-		return [_lod.frame_switches, null, _lod.last_update_ms, counts[0], counts[1], counts[2]]
+		return [_lod.frame_switches, _adaptive.bias if _adaptive_active() else null, _lod.last_update_ms, counts[0], counts[1], counts[2]]
 	var baked_level := clampi(int(_scene_info.get("tree_lod_level", 0)), 0, 2)
 	counts[baked_level] = _tree_instances
 	return [0, null, null, counts[0], counts[1], counts[2]]
+
+
+## lod_policies_updated (policies that ran an update since the previous row), then the controller columns:
+## signal name, smoothed and raw signal, target, relative error, P and I terms (bias units), controller CPU ms.
+## All empty unless the run is adaptive; the signal fields are also empty while the signal is unavailable.
+func _controller_columns() -> Array:
+	var updated := 0
+	for p in _manager.policies():
+		var now: int = p.updates_run
+		if now != int(_updates_seen.get(p.category(), now)):
+			updated += 1
+		_updates_seen[p.category()] = now
+	if not _adaptive_active():
+		return [updated, null, null, null, null, null, null, null, null]
+	var state: Dictionary = _adaptive.state()
+	var has_signal: bool = state["signal_available"]
+	return [
+		updated, state["signal"] if has_signal else null, state["signal_ms"] if has_signal else null,
+		state["raw_ms"] if has_signal else null, state["target_ms"], state["error"] if has_signal else null,
+		state["p_term"] if has_signal else null, state["i_term"], _adaptive.last_update_ms,
+	]
 
 
 func _apply_pose(distance: float) -> void:
@@ -244,6 +348,7 @@ func _finish() -> void:
 	if not _measured_rows.is_empty():
 		measured_s = (_measured_rows[_measured_rows.size() - 1] as Array)[1]
 	_sampler.stop()
+	_display_at_end = _display_state()
 	var summary := BenchmarkSummary.summarize(COLUMNS, _measured_rows, measured_s)
 
 	var directory := _output_directory()
@@ -251,14 +356,19 @@ func _finish() -> void:
 	var base := directory.path_join("%s_%s" % [_config.label, stamp])
 	var csv_error: int = _csv.save(base + ".csv")
 	var meta := {
+		"csv_schema_version": CSV_SCHEMA_VERSION,
 		"completed": not _aborted,
 		"aborted": _aborted,
 		"started_unix": _start_unix,
 		"config": _config.to_dict(),
 		"lod": _lod_meta(),
 		"grass": _grass_meta(),
+		"categories": _categories_meta(),
+		"terrain3d": _terrain_meta(),
+		"adaptive": _adaptive_meta(),
 		"debug_panel_removed": _debug_panel_removed,
 		"display": _display_info,
+		"display_at_end": _display_at_end,
 		"engine": _engine_info(),
 		"scene": _scene_info,
 		"camera_path": {
@@ -285,10 +395,20 @@ func _finish() -> void:
 	for name in ["render_gpu_ms", "render_cpu_ms", "draw_calls", "primitives"]:
 		var stat: Dictionary = summary["columns"][name]
 		print("[bench] %s: %s" % [name, "mean %.2f" % stat["mean"] if stat["available"] else "UNAVAILABLE"])
-	if _lod_active():
-		print("[bench] lod: %d switches, integrity after resync: %s, at end: %s" % [
-				meta["lod"]["total_switches_in_measured_run"], _lod_verify_start if not _lod_verify_start.is_empty() else "ok",
-				"ok" if meta["lod"]["integrity_check_at_end"].is_empty() else meta["lod"]["integrity_check_at_end"]])
+	for category in meta["categories"]:
+		var info: Dictionary = meta["categories"][category]
+		if info.get("enabled", false):
+			print("[bench] lod %s: %d %s switches, integrity after resync: %s, at end: %s" % [
+					category, info["total_switches_in_measured_run"], info["switch_unit"],
+					"ok" if str(info["integrity_check_after_resync"]).is_empty() else info["integrity_check_after_resync"],
+					"ok" if info["integrity_check_at_end"].is_empty() else info["integrity_check_at_end"]])
+	if not _display_at_end.get("window_matches_request", true):
+		print("[bench] WARNING: window is %s, not the requested %s" % [_display_at_end["window_size"], _display_at_end["requested_size"]])
+	if _config.lod_mode == "adaptive":
+		var stats: Dictionary = _adaptive.run_stats()
+		print("[bench] adaptive: signal=%s final bias %.3f, %d PI steps, %d reversals, %d frames at max bias, %d frames without signal" % [
+				_adaptive.signal_name, stats["final_bias"], stats["pi_steps"], stats["bias_reversals"],
+				stats["frames_at_bias_max"], stats["unavailable_signal_frames"]])
 	print("[bench] wrote %s.csv and .json (csv error=%s)" % [base, error_string(csv_error)])
 	if _config.quit_when_done:
 		get_tree().quit(0 if csv_error == OK and not _aborted else 1)
@@ -298,7 +418,7 @@ func _grass_meta() -> Dictionary:
 	if _grass == null:
 		return {"style": "legacy", "note": "no GrassLod node"}
 	var meta: Dictionary = _grass.describe()
-	meta["integrity_check_after_resync"] = _grass_verify_start
+	meta["integrity_check_after_resync"] = _verify_start.get("grass", "not run")
 	meta["integrity_check_at_end"] = _grass.verify()
 	meta["total_switches_in_measured_run"] = int(_sum_column("grass_switches"))
 	return meta
@@ -308,10 +428,108 @@ func _lod_meta() -> Dictionary:
 	var meta := {"mode": _config.lod_mode}
 	if _lod_active():
 		meta.merge(_lod.describe())
-		meta["integrity_check_after_resync"] = _lod_verify_start
+		meta["integrity_check_after_resync"] = _verify_start.get("trees", "not run")
 		meta["integrity_check_at_end"] = _lod.verify()
 		meta["total_switches_in_measured_run"] = int(_sum_column("lod_switches"))
 	return meta
+
+
+## Per category: whether its policy ran, its settings, instance counts, switches in the measured run and integrity checks.
+## Rocks are listed with their instance count only (no LOD exists for them).
+func _categories_meta() -> Dictionary:
+	var result := {}
+	var switch_columns := {"trees": "lod_switches", "grass": "grass_switches", "bushes": "bush_switches", "debris": "debris_switches"}
+	for p in _manager.policies():
+		var category: String = p.category()
+		var active: bool = p.enabled and p.is_built() and (p != _grass or _grass_lod_active())
+		var info: Dictionary = {
+			"enabled": active, "switch_unit": p.switch_unit(), "instances": p.instance_total(),
+			"settings": p.describe(),
+			"integrity_check_after_resync": _verify_start.get(category, "not run"),
+			"integrity_check_at_end": p.verify() if active else "",
+			"total_switches_in_measured_run": int(_sum_column(switch_columns[category])) if active else 0,
+			# Initialisation is reported apart from the steady-state update cost: build_ms is the one-time build on the
+			# first enabled frame (warm-up, outside the measured window), resync_ms the quiet resync at the path start.
+			"initialization": {"build_ms": p.build_ms if p.is_built() else null, "resync_ms": _init_costs.get(category, {}).get("resync_ms")},
+			"updates": _update_stats(p) if active else {},
+		}
+		if p == _grass:
+			info["style"] = _config.grass_style
+		result[category] = info
+	result["rocks"] = {"enabled": false, "instances": _manager.rock_instances(), "note": "metrics only, no rock LOD"}
+	return result
+
+
+## Terrain3D's own LOD and collision settings. They are recorded, never changed: terrain LOD is independent of
+## the object policies above. Only properties the loaded Terrain3D build actually has are listed.
+## Update runs and CPU cost of one policy inside the measured window (frames skipped by the schedule cost nothing).
+func _update_stats(p: Node) -> Dictionary:
+	var start: Dictionary = _measure_start.get(p.category(), {"updates_run": 0, "total_update_ms": 0.0})
+	var runs: int = p.updates_run - int(start["updates_run"])
+	var total_ms: float = p.total_update_ms - float(start["total_update_ms"])
+	return {
+		"updates_run": runs, "total_update_ms": total_ms, "mean_ms_per_update": total_ms / maxf(runs, 1),
+		"mean_ms_per_frame": total_ms / maxf(_measured_rows.size(), 1),
+		"schedule_interval_s": p.update_interval_s, "min_camera_move_m": p.min_camera_move,
+		"max_changes_per_update": p.max_changes_per_update,
+	}
+
+
+## Controller settings and what happened in the measured run (empty unless the run is adaptive).
+func _adaptive_meta() -> Dictionary:
+	if _config.lod_mode != "adaptive" or _adaptive == null:
+		return {"used": false}
+	var result: Dictionary = _adaptive.describe()
+	result["used"] = true
+	result["signal_in_use"] = _adaptive.signal_name
+	result["run"] = _adaptive.run_stats()
+	result["bias_applied_by_category"] = {}
+	for p in _manager.policies():
+		result["bias_applied_by_category"][p.category()] = p.lod_bias
+	result["frames_with_signal"] = int(_summary_samples("ctrl_signal_ms"))
+	result["measured_frames"] = _measured_rows.size()
+	return result
+
+
+func _summary_samples(column: String) -> int:
+	var index := COLUMNS.find(column)
+	var count := 0
+	for row in _measured_rows:
+		if row[index] != null:
+			count += 1
+	return count
+
+
+## Window and rendering state read back from the engine, to confirm the requested setup was really applied.
+func _display_state() -> Dictionary:
+	var window := get_window()
+	var viewport := get_viewport()
+	var requested := Vector2i(_config.width, _config.height)
+	return {
+		"window_size": window.size, "viewport_size": viewport.size, "requested_size": requested,
+		"window_matches_request": window.size == requested,
+		"vsync_mode": DisplayServer.window_get_vsync_mode(), "max_fps": Engine.max_fps,
+		"rendering_method": RenderingServer.get_current_rendering_method(),
+		"rendering_driver": RenderingServer.get_current_rendering_driver_name(),
+		"screen_size": DisplayServer.screen_get_size(),
+	}
+
+
+func _terrain_meta() -> Dictionary:
+	var terrain := _environment.get_node_or_null("Terrain3D")
+	var result := {}
+	if terrain == null:
+		return result
+	for name in ["mesh_lods", "mesh_size", "vertex_spacing", "region_size", "collision_mode", "collision_radius",
+			"collision_shape_size", "collision_priority", "cull_margin", "gi_mode", "cast_shadows"]:
+		if name in terrain:
+			result[name] = terrain.get(name)
+	var material: Variant = terrain.get("material")
+	if material != null:
+		result["world_background"] = material.get("world_background")
+	result["version"] = str(terrain.get("version")) if "version" in terrain else "unknown"
+	result["lod_changed_by_benchmark"] = false
+	return result
 
 
 func _sum_column(name: String) -> float:
@@ -418,6 +636,8 @@ func _scene_fingerprint(terrain: Terrain3D) -> Dictionary:
 		"vegetation_multimesh_nodes": nodes,
 		"vegetation_instances": instances,
 		"tree_instances": _tree_instances,
+		"instances_by_kind": VegetationCounts.count(vegetation),
+		"grass_field_cells": _environment.get_node("GrassField").get_child_count() if _environment.has_node("GrassField") else 0,
 	}
 
 

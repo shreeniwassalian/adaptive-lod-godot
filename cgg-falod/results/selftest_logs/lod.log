@@ -1,0 +1,120 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+D3D12 12_0 - Forward+ - Using Device #0: NVIDIA - NVIDIA Quadro P3200
+
+WARNING: instance_reset_physics_interpolation() is deprecated.
+   at: _instance_reset_physics_interpolation_bind_compat_104269 (servers/rendering/rendering_server.compat.inc:62)
+[landscape] player spawn=(180.0, 12.15847, 182.0) ground=12.11 water_clearance=24.8 m
+[lod] baseline built in 975 ms: 253 chunks, 9816 trees, +958 MultiMesh nodes, thresholds 60/150 m, hysteresis 10 m, camera=/root/Terrain3DEnvironment/Player/CameraPivot/SpringArm3D/Camera3D
+[grass] v2 style, 1008 cells, 403088 full-detail clumps, 22320 legacy clumps, LOD on (25/60/110 m, hysteresis 6 m)
+[bushes] density LOD built in 267 ms: 255 chunks, 7615 instances, densities ["100%", "60%", "30%", "10%", "0%"] at [50.0, 100.0, 160.0] m, cull 240 m, hysteresis 8 m
+[debris] density LOD built in 247 ms: 244 chunks, 1341 instances, densities ["100%", "50%", "20%", "0%"] at [30.0, 60.0] m, cull 110 m, hysteresis 5 m
+[selftest] ok   gameplay: active camera is the player's camera
+[selftest] ok   gameplay: player stands on the ground after spawn
+[selftest] ok   gameplay: controller built itself on the first frame
+[selftest] spawn level counts: [46, 676, 9094] total_switches=0
+[selftest] ok   gameplay: player on ground at (-300.0, -250.0)
+[selftest] ok   gameplay: integrity at (-300.0, -250.0)
+[selftest] player at (-300.0, -250.0): on_floor=true after 42 physics frames levels [8, 243, 9565] switches_total=973 integrity=ok
+[selftest] ok   gameplay: player on ground at (250.0, 300.0)
+[selftest] ok   gameplay: integrity at (250.0, 300.0)
+[selftest] player at (250.0, 300.0): on_floor=true after 38 physics frames levels [141, 448, 9227] switches_total=1813 integrity=ok
+[selftest] ok   gameplay: player on ground at (-100.0, 350.0)
+[selftest] ok   gameplay: integrity at (-100.0, 350.0)
+[selftest] player at (-100.0, 350.0): on_floor=true after 38 physics frames levels [136, 670, 9010] switches_total=3208 integrity=ok
+[selftest] ok   gameplay: player on ground at (300.0, -300.0)
+[selftest] ok   gameplay: integrity at (300.0, -300.0)
+[selftest] player at (300.0, -300.0): on_floor=true after 38 physics frames levels [32, 229, 9555] switches_total=4276 integrity=ok
+[selftest] ok   gameplay: level counts changed when the player moved (4 of 4 moves)
+[selftest] ok   gameplay: switches were counted
+[selftest] ok   panel: no Baseline button
+[selftest] ok   panel: hidden by default
+[selftest] ok   panel: mouse captured before opening
+[selftest] ok   panel: F3 shows it
+[selftest] ok   panel: cursor released while shown
+[selftest] ok   panel shows controller state (initial): mode=Adaptive counts=[46, 255, 9515] switches=4276
+[selftest] panel text:
+Mode        Adaptive
+FPS         54.7
+Frame time  18.28 ms
+Trees LOD0  46
+Trees LOD1  255
+Trees LOD2  9515
+Trees total 9816
+LOD switches 4276 (+0 last frame)
+Thresholds  60 / 150 m, hysteresis 10 m
+Target      16.67 ms (signal: auto)
+Signal      gpu 7.80 ms smoothed, 7.73 raw
+Error       -53.1 %  P -0.301  I +0.000
+Bias        +0.000 (finest detail)   >0 = coarser
+Controller  0.013 ms/frame, 1 PI steps
+Grass       drawn 4177 / 403088  per tier 1995/1598/584  switches 350 (+0) cells
+Bushes      drawn 399 / 7615  per tier 89/99/138/73/0  switches 394 (+0) chunks
+Debris      drawn 14 / 1341  per tier 0/9/5/0  switches 86 (+0) chunks
+Rocks       606 (metrics only, no LOD)
+LOD update  0.04 ms/frame (all categories, averaged)
+[selftest] ok   panel: thresholds shown
+[selftest] ok   panel: FPS shown (54.7)
+[selftest] ok   panel: frame time shown
+[lod] disabled: baked vegetation restored in 103 ms
+[selftest] ok   panel: None button disables the LOD
+[selftest] ok   panel: None restores all 9816 trees to level 0
+[selftest] ok   panel: integrity after None: 
+[selftest] ok   panel: restore does not count as switches
+[selftest] ok   panel shows controller state (None mode): mode=None counts=[9816, 0, 0] switches=4276
+[selftest] ok   panel: levels stay baked while None and the camera moves
+[selftest] ok   panel: Adaptive button re-enables the LOD [140, 798, 8878]
+[lod] disabled: baked vegetation restored in 86 ms
+[selftest] ok   panel shows controller state (2 frames after None): mode=None counts=[9816, 0, 0] switches=4276
+[selftest] ok   panel shows controller state (2 frames after Adaptive): mode=Adaptive counts=[140, 798, 8878] switches=4276
+[selftest] ok   panel: tree total unchanged (9816)
+[selftest] ok   panel: integrity after Adaptive: 
+[selftest] ok   panel shows controller state (Adaptive mode): mode=Adaptive counts=[140, 798, 8878] switches=4276
+[selftest] ok   panel: switches counted after moving (4276 -> 5476)
+[selftest] ok   panel shows controller state (after moving): mode=Adaptive counts=[50, 476, 9290] switches=5736
+[lod] disabled: baked vegetation restored in 140 ms
+[selftest] ok   panel: F4 switches Adaptive to None
+[selftest] ok   panel: F4 switches back to Adaptive
+[lod] disabled: baked vegetation restored in 52 ms
+[lod] disabled: baked vegetation restored in 62 ms
+[lod] disabled: baked vegetation restored in 46 ms
+[lod] disabled: baked vegetation restored in 52 ms
+[lod] disabled: baked vegetation restored in 36 ms
+[selftest] ok   panel: 5 round trips keep all 9816 trees
+[selftest] ok   panel: integrity after round trips: 
+[selftest] ok   panel: F3 hides it
+[selftest] ok   panel: mouse captured again after hiding
+[selftest] ok   collision: trunk ray results identical after LOD changes
+[selftest] ok   collision: trunk rays hit (40 of 40)
+[selftest] trunk ray hits 40/40 before and 40/40 after LOD changes
+[selftest] ok   path builds: 
+[selftest] ok   path: integrity at 0 m: 
+[selftest] ok   path: integrity at 100 m: 
+[selftest] ok   path: integrity at 200 m: 
+[selftest] ok   path: integrity at 300 m: 
+[selftest] ok   path: integrity at 400 m: 
+[selftest] ok   path: integrity at 500 m: 
+[selftest] path done: levels [73, 496, 9247] total_switches=10043
+[selftest] PASS (0 failures)
+ERROR: 1437 RID allocations of type 'N10RendererRD11MeshStorage9MultiMeshE' were leaked at exit.
+ERROR: 6 RID allocations of type 'N10RendererRD11MeshStorage4MeshE' were leaked at exit.
+ERROR: 4 RID allocations of type 'N10RendererRD15MaterialStorage8MaterialE' were leaked at exit.
+ERROR: 2 RID allocations of type 'N10RendererRD15MaterialStorage6ShaderE' were leaked at exit.
+ERROR: 4 RID allocations of type 'N10RendererRD14TextureStorage7TextureE' were leaked at exit.
+ERROR: 2 shaders of type SceneForwardClusteredShaderRD were never freed
+   at: ~ShaderRD (servers/rendering/renderer_rd/shader_rd.cpp:1236)
+WARNING: 1437 RIDs of type "StorageBuffer" were leaked.
+   at: _free_rids (servers/rendering/rendering_device.cpp:8686)
+WARNING: 4 RIDs of type "UniformBuffer" were leaked.
+   at: _free_rids (servers/rendering/rendering_device.cpp:8686)
+WARNING: 24 RIDs of type "VertexArray" were leaked.
+   at: _free_rids (servers/rendering/rendering_device.cpp:8686)
+WARNING: 24 RIDs of type "VertexBuffer" were leaked.
+   at: _free_rids (servers/rendering/rendering_device.cpp:8686)
+WARNING: 8 RIDs of type "Texture" were leaked.
+   at: finalize (servers/rendering/rendering_device.cpp:8900)
+WARNING: 2198 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 18 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+ERROR: Pages in use exist at exit in PagedAllocator: N12VariantPools12BucketMediumE
+   at: ~PagedAllocator (./core/templates/paged_allocator.h:170)

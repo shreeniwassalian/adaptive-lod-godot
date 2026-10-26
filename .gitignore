@@ -1,0 +1,19 @@
+# Repo-wide ignores (the Godot project has its own cgg-falod/.gitignore)
+Terrain3D_v1.0.2-stable/
+node_modules/
+__pycache__/
+*.pyc
+*.mkv
+*.mp4
+# Bulky generated benchmark data and media; the analysis tables, charts and reports are kept
+cgg-falod/results/probe/
+cgg-falod/results/final_run_*/bench/
+cgg-falod/results/final_run_*/bench_supplement/
+cgg-falod/results/final_run_*/media/
+cgg-falod/results/final_run_*/media_na/
+cgg-falod/results/final_run_*/presentation/
+cgg-falod/results/final_run_*/presentation_na/img/
+cgg-falod/results/t1/pre/
+cgg-falod/results/t1/pre2/
+cgg-falod/results/t1/aux/
+cgg-falod/results/t1/f4fix/

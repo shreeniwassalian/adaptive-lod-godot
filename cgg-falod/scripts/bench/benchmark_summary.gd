@@ -7,6 +7,9 @@ const STAT_COLUMNS := [
 	"draw_calls", "draw_calls_visible", "primitives", "primitives_visible", "objects", "video_mem_mb",
 	"lod_switches", "lod_bias", "lod_update_ms", "trees_lod0", "trees_lod1", "trees_lod2",
 	"grass_clumps_t0", "grass_clumps_t1", "grass_clumps_t2", "grass_switches", "grass_update_ms",
+	"bush_drawn", "bush_switches", "bush_update_ms", "debris_drawn", "debris_switches", "debris_update_ms",
+	"rocks_instances", "lod_total_update_ms", "lod_policies_updated", "ctrl_signal_ms", "ctrl_raw_ms", "ctrl_target_ms",
+	"ctrl_error", "ctrl_p_term", "ctrl_i_term", "ctrl_update_ms",
 ]
 ## Frames slower than this count as hitches.
 const HITCH_MS := 33.4

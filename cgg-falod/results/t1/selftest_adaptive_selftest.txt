@@ -1,0 +1,175 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+D3D12 12_0 - Forward+ - Using Device #0: NVIDIA - NVIDIA Quadro P3200
+
+[adaptive-test] ok   pi: sustained overload raises the bias (0.656)
+[adaptive-test] ok   pi: the bias rises by at most max_rise per update
+[adaptive-test] ok   pi: unreachable target saturates at bias_max (2.000)
+[adaptive-test] ok   pi: integral stays bounded while saturated (0.000 <= 2.000)
+[adaptive-test] ok   pi: anti-windup: first update after saturation already recovers (1.970)
+[adaptive-test] ok   pi: headroom recovers gradually (<= max_fall per update) down to bias_min in 66 updates
+[adaptive-test] ok   pi: recovery from the coarsest takes at least ~bias_max/max_fall updates
+[adaptive-test] ok   pi: clamps at the finest permitted bias and does not go below it
+[adaptive-test] ok   pi: errors inside the dead band leave the bias alone
+[adaptive-test] ok   pi: toy loop converges to the target (cost 18.54 ms vs 18.00, bias 0.834)
+[adaptive-test] ok   pi: toy loop is stable (bias spread 0.002 in the last 25 s, 0 reversals after 50 s)
+[adaptive-test] ok   pi: toy loop recovers to the baseline bias monotonically when load drops
+[adaptive-test] ok   pi: reset() restores the initial state and replays an identical trace
+[adaptive-test] ok   pi: the replayed trace is not trivially zero
+[adaptive-test] ok   config: --bench-lod-mode=adaptive is accepted []
+[adaptive-test] ok   config: stress profile = 2560x1440, 8 ms
+[adaptive-test] ok   config: controller options are parsed
+[adaptive-test] ok   config: explicit options override the profile whatever the order
+[adaptive-test] ok   config: defaults = 1080p, 16.67 ms, VSync off, uncapped
+[adaptive-test] ok   config: to_dict records the controller parameters
+[adaptive-test] ok   config: an unknown mode is rejected
+[adaptive-test] ok   config: an unknown signal is rejected
+[adaptive-test] ok   config: a negative gain is rejected
+WARNING: instance_reset_physics_interpolation() is deprecated.
+   at: _instance_reset_physics_interpolation_bind_compat_104269 (servers/rendering/rendering_server.compat.inc:62)
+[landscape] player spawn=(180.0, 12.15847, 182.0) ground=12.11 water_clearance=24.8 m
+[adaptive-test] ok   setup: benchmark path builds
+[adaptive-test] ok   modes: baseline selected, controller inactive
+[lod] baseline built in 300 ms: 253 chunks, 9816 trees, +958 MultiMesh nodes, thresholds 60/150 m, hysteresis 10 m, camera=/root/@Camera3D@5
+[grass] v2 style, 1008 cells, 403088 full-detail clumps, 22320 legacy clumps, LOD on (25/60/110 m, hysteresis 6 m)
+[bushes] density LOD built in 72 ms: 255 chunks, 7615 instances, densities ["100%", "60%", "30%", "10%", "0%"] at [50.0, 100.0, 160.0] m, cull 240 m, hysteresis 8 m
+[debris] density LOD built in 63 ms: 244 chunks, 1341 instances, densities ["100%", "50%", "20%", "0%"] at [30.0, 60.0] m, cull 110 m, hysteresis 5 m
+[adaptive-test] ok   modes: baseline keeps the default schedule (every frame, no limit, bias 0)
+[lod] disabled: baked vegetation restored in 19 ms
+[adaptive-test] ok   modes: none disables every category
+[adaptive-test] ok   modes: none draws every bush and debris instance
+[adaptive-test] ok   modes: adaptive selected, controller active
+[adaptive-test] ok   modes: adaptive applies the update schedule and change budgets, bias starts at 0
+[adaptive-test] ok   modes: adaptive at bias 0 shows exactly the baseline state
+[adaptive-test] ok   modes: leaving adaptive resets bias, schedule and budgets
+[adaptive-test] ok   modes: baseline after adaptive equals the original baseline state
+[adaptive-test] ok   pressure: sustained overload raises the bias (2.000)
+[adaptive-test] ok   pressure: an unreachable target pins the bias at the coarsest permitted value
+[adaptive-test] ok   pressure: bushes 647 -> 415, debris 30 -> 17, grass clumps 5523 -> 2177 drawn
+[adaptive-test] ok   pressure: distant trees move to a coarser mesh, nearby LOD0 trees do not (LOD0 68 -> 68, LOD1 635 -> 296, LOD2 9113 -> 9452)
+[adaptive-test] ok   pressure: every category is consistent at the coarsest bias: 
+[adaptive-test] ok   pressure: no switching once the bias has stopped moving and the camera is still
+[adaptive-test] ok   headroom: bias recovers gradually to the baseline in about 18 s (72 samples)
+[adaptive-test] ok   headroom: bush count recovered toward the baseline (615 between 415 and 647)
+[adaptive-test] ok   headroom: every category is consistent after recovery: 
+[adaptive-test] ok   spike: a single 900 ms hitch moved the bias by only 0.014
+[adaptive-test] ok   unavailable: the bias is held (2.000) and no PI step runs while the signal is missing (600 frames)
+[adaptive-test] ok   unavailable: control resumes when the signal returns
+[adaptive-test] ok   hold: a held controller does not move
+[adaptive-test] ok   reset: bias, integral, counters and every policy's bias are back to 0
+[adaptive-test] ok   reset: the same synthetic input after a reset gives the same bias (2.0000 vs 2.0000)
+[adaptive-test] ok   priority: at a small bias only grass coarsens (0.3: grass 0.30 trees 0.00 bushes 0.00 debris 0.00)
+[adaptive-test] ok   priority: distant trees follow grass, bushes and debris still untouched (0.8: grass 0.80 trees 0.30 bushes 0.00 debris 0.00)
+[adaptive-test] ok   priority: every category stops at its own cap at the maximum global bias (2.0: grass 1.00 trees 1.00 bushes 0.50 debris 0.50)
+[adaptive-test] ok   priority: per-category bias is non-decreasing with the global bias and inside the safety limits
+[adaptive-test] category bias by global bias: 0.0: grass 0.00 trees 0.00 bushes 0.00 debris 0.00 | 0.3: grass 0.30 trees 0.00 bushes 0.00 debris 0.00 | 0.8: grass 0.80 trees 0.30 bushes 0.00 debris 0.00 | 1.2: grass 1.00 trees 0.70 bushes 0.10 debris 0.10 | 1.6: grass 1.00 trees 1.00 bushes 0.30 debris 0.30 | 2.0: grass 1.00 trees 1.00 bushes 0.50 debris 0.50
+[adaptive-test] ok   floor: baseline tree thresholds are exactly 60 / 150 m with hysteresis 10 m [60.0, 150.0]
+[adaptive-test] ok   floor: at any positive bias LOD1 starts no closer than 60 m and LOD2 no closer than 100 m
+[adaptive-test] ok   floor: sign convention: a larger positive bias never moves a threshold outwards
+[adaptive-test] ok   floor: bias 2.0 gives 60 / 100 m, not the unconstrained 20 / 50 m
+[adaptive-test] ok   floor: with the floors removed bias 2.0 would coarsen trees from [20.0, 50.0] m
+[adaptive-test] ok   floor: a negative (finer) bias moves the thresholds outwards
+[adaptive-test] ok   floor: path 60 m: no tree within 100 m differs from baseline and none is finer than baseline (0 violations, 559 distant trees coarser)
+[adaptive-test] ok   floor: path 200 m: no tree within 100 m differs from baseline and none is finer than baseline (0 violations, 318 distant trees coarser)
+[adaptive-test] ok   floor: path 350 m: no tree within 100 m differs from baseline and none is finer than baseline (0 violations, 433 distant trees coarser)
+[adaptive-test] ok   hysteresis: bias 0.0 threshold 0 is 60 m
+[adaptive-test] ok   hysteresis: threshold 60 m: wobbling +-8 m around it causes no switch of that tree (level 0, 0 changes)
+[adaptive-test] ok   hysteresis: past the band (73 m) the tree switches to the coarser level
+[adaptive-test] ok   hysteresis: and wobbling back inside the band does not switch it back
+[adaptive-test] ok   hysteresis: it returns to the finer level only after passing the band on the near side
+[adaptive-test] ok   hysteresis: bias 1.0 threshold 1 is 100 m
+[adaptive-test] ok   hysteresis: threshold 100 m: wobbling +-8 m around it causes no switch of that tree (level 1, 0 changes)
+[adaptive-test] ok   hysteresis: past the band (113 m) the tree switches to the coarser level
+[adaptive-test] ok   hysteresis: and wobbling back inside the band does not switch it back
+[adaptive-test] ok   hysteresis: it returns to the finer level only after passing the band on the near side
+[adaptive-test] ok   hysteresis: bias changes that stay above the floor move no tree at 75 m
+[adaptive-test] transitions baseline over 20 s: 1110 tree level changes, 0 switched back within 2 s, largest burst 13 trees per 0.1 s, most changes of one tree 3, largest single-frame switch count 6, peak bias 0.00
+[adaptive-test] transitions adaptive over 20 s: 998 tree level changes, 4 switched back within 2 s, largest burst 38 trees per 0.1 s, most changes of one tree 3, largest single-frame switch count 38, peak bias 2.00
+[adaptive-test] ok   transitions: adaptive control causes no more switch-backs than the baseline (4 vs 0)
+[adaptive-test] ok   transitions: no frame switched more trees than the change budget (38 <= 200)
+[adaptive-test] ok   transitions: no tree changed level more than 4 times in 20 s (3)
+[adaptive-test] ok   transitions: the controller actually applied pressure in this test (peak bias 2.00)
+[adaptive-test] ok   budget: no policy switched more than 12 units in one update (most: 12)
+[adaptive-test] ok   budget: the bias jump needed several updates to finish (88 policy updates)
+[adaptive-test] ok   budget: the budget-limited run converges to exactly the unlimited result
+[adaptive-test] ok   budget: the unlimited update did switch more than the budget (252 > 12), so the limit was exercised
+[adaptive-test] ok   schedule: a still camera with unchanged bias runs no policy updates
+[adaptive-test] ok   schedule: moving the camera runs an update within the interval
+[adaptive-test] ok   schedule: while moving at 8 m/s the four policies run 0.57 updates per frame instead of 4
+[adaptive-test] ok   integrity: all categories consistent under adaptive control: 
+[adaptive-test] ok   integrity: every tree is drawn exactly once at some level (9816)
+[adaptive-test] ok   integrity: tree instances equal the saved scene (9816 == 9816)
+[adaptive-test] ok   integrity: bushes buffers are a permutation of the saved instances (transforms unchanged): 
+[adaptive-test] ok   integrity: debris buffers are a permutation of the saved instances (transforms unchanged): 
+[adaptive-test] ok   integrity: collision bodies, shapes and vertices equal the saved scene { "bodies": 256, "shapes": 256, "vertices": 709092 }
+[adaptive-test] ok   determinism: grass tiers at a given camera and bias are identical across runs (af7c2e5c75ce)
+[adaptive-test] ok   determinism: a positive bias moves cells to coarser tiers (clumps 5281 -> 3809, culled cells 955 -> 986)
+[adaptive-test] ok   determinism: bush density subsets depend only on camera and bias
+[adaptive-test] ok   terrain: Terrain3D LOD/mesh/collision settings unchanged by all adaptive activity { "mesh_lods": 7, "mesh_size": 48, "vertex_spacing": 1.0, "region_size": 512, "collision_mode": 3, "collision_radius": 64, "collision_shape_size": 16 }
+[adaptive-test] ok   panel: still exactly one panel node
+[adaptive-test] ok   panel: F3 shows it
+[adaptive-test] ok   panel: has an Adaptive button next to None and Baseline
+[adaptive-test] ok   panel: the Adaptive button selects adaptive mode
+[adaptive-test] panel text (Adaptive, no signal):
+Mode        Adaptive
+FPS         60.2
+Frame time  16.60 ms
+Trees LOD0  146
+Trees LOD1  248
+Trees LOD2  9422
+Trees total 9816
+LOD switches 6715 (+0 last frame)
+Thresholds  60 / 150 m, hysteresis 10 m
+Target      16.67 ms (signal: auto)
+! Adaptive active but the timing signal is UNAVAILABLE (VSync or a frame cap is on and no GPU time is reported): bias is held
+Bias        +0.000   >0 = coarser
+Controller  0.001 ms/frame, 0 PI steps
+Grass       drawn 5281 / 403088  per tier 2380/2173/728  switches 880 (+0) cells
+Bushes      drawn 389 / 7615  per tier 124/127/71/67/0  switches 876 (+0) chunks
+Debris      drawn 24 / 1341  per tier 18/0/6/0  switches 208 (+0) chunks
+Rocks       606 (metrics only, no LOD)
+LOD update  0.00 ms/frame (all categories, averaged)
+[adaptive-test] ok   panel: shows the Adaptive mode
+[adaptive-test] ok   panel: warns clearly that the timing signal is unavailable
+[adaptive-test] ok   panel: shows a 'Target' line
+[adaptive-test] ok   panel: shows a 'Bias' line
+[adaptive-test] ok   panel: shows a 'Trees LOD0' line
+[adaptive-test] ok   panel: shows a 'Grass' line
+[adaptive-test] ok   panel: shows a 'Bushes' line
+[adaptive-test] ok   panel: shows a 'Debris' line
+[adaptive-test] ok   panel: shows a 'Rocks' line
+[adaptive-test] ok   panel: shows a 'LOD update' line
+[adaptive-test] ok   panel: shows the signal once it is available
+[lod] disabled: baked vegetation restored in 21 ms
+[adaptive-test] ok   panel: F4 cycles Adaptive -> None
+[adaptive-test] FAIL panel: F4 cycles None -> Baseline
+[lod] disabled: baked vegetation restored in 4 ms
+[adaptive-test] FAIL panel: F4 cycles Baseline -> Adaptive
+[adaptive-test] ok   panel: F3 hides it
+[adaptive-test] initialisation cost (first enabled frame): trees 300 ms, grass 18 ms, bushes 72 ms, debris 63 ms (measured once, in this process)
+[adaptive-test] cost baseline (every frame)         3001 frames: policies 2.695 ms/frame total [trees 1.170 (3001 runs, 2830 sw); grass 1.165 (3001 runs, 355 sw); bushes 0.185 (3001 runs, 247 sw); debris 0.175 (3001 runs, 91 sw)]
+[adaptive-test] cost adaptive, bias 0 (scheduled)   3001 frames: policies 0.393 ms/frame total [trees 0.175 (429 runs, 2827 sw); grass 0.166 (428 runs, 354 sw); bushes 0.027 (428 runs, 246 sw); debris 0.025 (429 runs, 91 sw)], controller 0.0010 ms/frame, final bias 0.00
+[adaptive-test] cost adaptive, 1.6x overload        3001 frames: policies 0.353 ms/frame total [trees 0.137 (429 runs, 2286 sw); grass 0.165 (428 runs, 264 sw); bushes 0.026 (428 runs, 210 sw); debris 0.025 (429 runs, 86 sw)], controller 0.0012 ms/frame, final bias 2.00
+[adaptive-test] FAIL (2 failures)
+ERROR: 1437 RID allocations of type 'N10RendererRD11MeshStorage9MultiMeshE' were leaked at exit.
+ERROR: 6 RID allocations of type 'N10RendererRD11MeshStorage4MeshE' were leaked at exit.
+ERROR: 4 RID allocations of type 'N10RendererRD15MaterialStorage8MaterialE' were leaked at exit.
+ERROR: 2 RID allocations of type 'N10RendererRD15MaterialStorage6ShaderE' were leaked at exit.
+ERROR: 4 RID allocations of type 'N10RendererRD14TextureStorage7TextureE' were leaked at exit.
+ERROR: 2 shaders of type SceneForwardClusteredShaderRD were never freed
+   at: ~ShaderRD (servers/rendering/renderer_rd/shader_rd.cpp:1236)
+WARNING: 1437 RIDs of type "StorageBuffer" were leaked.
+   at: _free_rids (servers/rendering/rendering_device.cpp:8686)
+WARNING: 4 RIDs of type "UniformBuffer" were leaked.
+   at: _free_rids (servers/rendering/rendering_device.cpp:8686)
+WARNING: 24 RIDs of type "VertexArray" were leaked.
+   at: _free_rids (servers/rendering/rendering_device.cpp:8686)
+WARNING: 24 RIDs of type "VertexBuffer" were leaked.
+   at: _free_rids (servers/rendering/rendering_device.cpp:8686)
+WARNING: 8 RIDs of type "Texture" were leaked.
+   at: finalize (servers/rendering/rendering_device.cpp:8900)
+WARNING: 2198 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 18 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+ERROR: Pages in use exist at exit in PagedAllocator: N12VariantPools12BucketMediumE
+   at: ~PagedAllocator (./core/templates/paged_allocator.h:170)

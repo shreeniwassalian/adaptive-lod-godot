@@ -137,7 +137,8 @@ func _initialize() -> void:
 func _test_panel(env: Node, lod: Node, player: Node, terrain: Terrain3D, shots_dir: String) -> void:
 	var panel := env.get_node("LodDebugPanel")
 	var none_button := panel.find_child("NoneButton", true, false) as Button
-	var baseline_button := panel.find_child("BaselineButton", true, false) as Button
+	var baseline_button := panel.find_child("AdaptiveButton", true, false) as Button  # Baseline is not offered in the panel
+	_check(panel.find_child("BaselineButton", true, false) == null, "panel: no Baseline button")
 	var total: int = lod._lod_set.tree_instances
 	_check(not panel.is_panel_visible(), "panel: hidden by default")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "panel: mouse captured before opening")
@@ -145,7 +146,7 @@ func _test_panel(env: Node, lod: Node, player: Node, terrain: Terrain3D, shots_d
 	await create_timer(0.5).timeout
 	_check(panel.is_panel_visible(), "panel: F3 shows it")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "panel: cursor released while shown")
-	await _check_panel_matches(panel, lod, "Baseline", "initial")
+	await _check_panel_matches(panel, lod, "Adaptive", "initial")
 	var text: String = panel.get_text()
 	print("[selftest] panel text:\n" + text)
 	_check(text.contains("Thresholds  60 / 150 m, hysteresis 10 m"), "panel: thresholds shown")
@@ -173,11 +174,11 @@ func _test_panel(env: Node, lod: Node, player: Node, terrain: Terrain3D, shots_d
 	await create_timer(0.5).timeout
 	_check(lod.level_counts() == PackedInt32Array([total, 0, 0]), "panel: levels stay baked while None and the camera moves")
 
-	# Baseline again
+	# Adaptive again
 	baseline_button.pressed.emit()
 	await create_timer(0.5).timeout
 	var counts: PackedInt32Array = lod.level_counts()
-	_check(lod.enabled and counts[0] < total and counts[1] + counts[2] > 0, "panel: Baseline button re-enables the LOD %s" % counts)
+	_check(lod.enabled and counts[0] < total and counts[1] + counts[2] > 0, "panel: Adaptive button re-enables the LOD %s" % counts)
 	# Immediately after a click (a few frames, not the refresh interval) the label and numbers must agree.
 	none_button.pressed.emit()
 	await process_frame
@@ -186,11 +187,11 @@ func _test_panel(env: Node, lod: Node, player: Node, terrain: Terrain3D, shots_d
 	baseline_button.pressed.emit()
 	await process_frame
 	await process_frame
-	await _check_panel_matches(panel, lod, "Baseline", "2 frames after Baseline", 0.0)
+	await _check_panel_matches(panel, lod, "Adaptive", "2 frames after Adaptive", 0.0)
 	counts = lod.level_counts()
 	_check(counts[0] + counts[1] + counts[2] == total, "panel: tree total unchanged (%d)" % total)
-	_check(lod.verify().is_empty(), "panel: integrity after Baseline: %s" % lod.verify())
-	await _check_panel_matches(panel, lod, "Baseline", "Baseline mode")
+	_check(lod.verify().is_empty(), "panel: integrity after Adaptive: %s" % lod.verify())
+	await _check_panel_matches(panel, lod, "Adaptive", "Adaptive mode")
 
 	# Counters follow camera movement
 	var switches_before: int = lod.total_switches
@@ -198,15 +199,16 @@ func _test_panel(env: Node, lod: Node, player: Node, terrain: Terrain3D, shots_d
 	player.place_at(Vector3(spot.x, terrain.data.get_height(Vector3(spot.x, 0, spot.y)) + 1.0, spot.y), 0.0)
 	await create_timer(0.6).timeout
 	_check(lod.total_switches > switches_before, "panel: switches counted after moving (%d -> %d)" % [switches_before, lod.total_switches])
-	await _check_panel_matches(panel, lod, "Baseline", "after moving")
+	await _check_panel_matches(panel, lod, "Adaptive", "after moving")
 
 	# F4 and repeated round trips keep every tree
+	# F4 toggles Adaptive <-> None (adaptive keeps the tree policy enabled)
 	_key(KEY_F4)
 	await create_timer(0.3).timeout
-	_check(not lod.enabled, "panel: F4 switches to None")
+	_check(not lod.enabled, "panel: F4 switches Adaptive to None")
 	_key(KEY_F4)
 	await create_timer(0.3).timeout
-	_check(lod.enabled, "panel: F4 switches back to Baseline")
+	_check(lod.enabled and env.get_node("LodManager").mode() == "adaptive", "panel: F4 switches back to Adaptive")
 	for i in 5:
 		none_button.pressed.emit()
 		await process_frame

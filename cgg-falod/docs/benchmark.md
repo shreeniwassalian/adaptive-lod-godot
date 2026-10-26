@@ -1,8 +1,9 @@
 # Benchmark
 
 Measures the Terrain3D scene along a scripted camera path with a selectable vegetation LOD mode
-(`--bench-lod-mode=none|baseline`, see `docs/vegetation_lod.md`). `none` leaves the baked scene untouched and is
-the reference run. It does not use the player, input, or physics.
+(`--bench-lod-mode=none|baseline|adaptive`, see `docs/vegetation_lod.md`, `docs/multi_category_lod.md` and `docs/adaptive_lod.md`). `none` leaves
+every category at full detail (baked trees, grass field at tier 0, all bushes and debris) and is the reference run;
+`baseline` runs the distance policies of all categories; `adaptive` runs the same policies with the PI controller. It does not use the player, input, or physics.
 
 ## Run
 
@@ -15,9 +16,11 @@ with exit code 2. A finished run exits 0 (1 if the CSV could not be written or t
 | Option | Default | Meaning |
 |---|---|---|
 | `--bench-label=NAME` | `no_lod` | file-name prefix, recorded in metadata |
-| `--bench-lod-mode=none\|baseline` | `none` | `none` = baked scene, no LOD; `baseline` = distance LOD (`VegetationLod` node) |
-| `--bench-grass=legacy\|v2` | `legacy` | `legacy` = the original sparse tufts (the earlier reference), `v2` = procedural grass field (`docs/grass.md`) |
-| `--bench-grass-lod=off\|distance` | `off` | v2 only: `off` = every cell at full detail, `distance` = per-cell distance tiers |
+| `--bench-lod-mode=none\|baseline\|adaptive` | `none` | `none` = every category at full detail; `baseline` = the distance policies of `--bench-lod-categories` (through the `LodManager` node); `adaptive` = the same policies under the PI controller |
+| `--bench-profile=normal\|stress` | `normal` | `normal` = 1920x1080, target 16.67 ms; `stress` = 2560x1440, target 8 ms. Explicit width/height/target options override it |
+| `--bench-target-ms=` `--bench-signal=auto\|gpu\|frame` `--bench-kp=` `--bench-ki=` `--bench-bias-min=` `--bench-bias-max=` `--bench-ctrl-interval=` `--bench-smoothing=` `--bench-max-rise=` `--bench-max-fall=` `--bench-policy-interval=` `--bench-switch-budget=` | see `docs/adaptive_lod.md` | adaptive controller settings; recorded in every run's `config.controller` |
+| `--bench-lod-categories=all\|a,b,..` | `all` | baseline and adaptive: any of `trees,grass,bushes,debris`. Used for per-category ablation runs. Rocks have no policy |
+| `--bench-grass=legacy\|v2` | `v2` | `v2` = procedural grass field (`docs/grass.md`, default since schema 3), `legacy` = the original sparse tufts (the earlier reference; has no LOD policy). Removed: `--bench-grass-lod` (use `--bench-lod-categories`) |
 | `--bench-seed=N` | 1337 | seeds Godot's global RNG. The world is baked and does not depend on it |
 | `--bench-warmup=S` / `--bench-duration=S` | 10 / 60 | seconds |
 | `--bench-settle-frames=N` | 10 | frames held at the path start, not recorded |
@@ -68,15 +71,36 @@ are read at the start of the next frame and paired with the previous frame's pos
 | `draw_calls_visible`, `primitives_visible` | count | `viewport_get_render_info(..., INFO_TYPE_VISIBLE)`: main camera pass only, excludes shadows |
 | `video_mem_mb` | MiB | `Performance.RENDER_VIDEO_MEM_USED`. Updates rarely; was constant in test runs |
 | `lod_switches` | count | trees that changed LOD level in the update that preceded the row's frame. `0` in `none` mode (no controller exists, so there are none) |
-| `lod_bias` | unitless | empty in both current modes (the baseline has no bias); reserved for the adaptive controller |
+| `lod_bias` | unitless | the controller's global bias in adaptive mode (> 0 = coarser, see `docs/adaptive_lod.md`); empty in `none` and `baseline` |
 | `lod_update_ms` | ms | CPU time of that LOD update (policy plus buffer writes), per frame. Empty in `none` mode |
 | `trees_lod0`, `trees_lod1`, `trees_lod2` | count | trees drawn at each mesh level (they sum to the tree total). In `none` mode all trees are at the baked level |
+| `grass_clumps_t0`, `grass_clumps_t1`, `grass_clumps_t2` | count | grass clumps drawn at each tier (legacy tufts count as t0) |
+| `grass_switches` | count | grass cells that changed tier in the update that preceded the row's frame; `0` when grass LOD is off |
+| `grass_update_ms` | ms | CPU time of that grass update. Empty unless grass LOD is on |
+| `bush_drawn`, `debris_drawn` | count | bush / debris instances drawn (density policy applied; all of them in `none` mode) |
+| `bush_switches`, `debris_switches` | count | chunks that changed density tier in the update that preceded the row's frame; `0` when off |
+| `bush_update_ms`, `debris_update_ms` | ms | CPU time of those updates. Empty when off |
+| `rocks_instances` | count | rock instances in the scene. Constant: rocks have no LOD (metrics only) |
+| `lod_total_update_ms` | ms | sum of the update costs of all active policies (trees + grass + bushes + debris). Empty when none is active |
+| `lod_policies_updated` | count | policies that ran an update since the previous row (all four every frame in baseline; fewer when the adaptive schedule skips updates) |
+| `ctrl_signal` | text | `gpu` or `frame`: the timing signal the controller used for this row. Empty if not adaptive or the signal was unavailable |
+| `ctrl_signal_ms`, `ctrl_raw_ms` | ms | smoothed signal fed to the PI step / the raw sample of the frame (clipped before smoothing). Empty as above |
+| `ctrl_target_ms` | ms | target. Empty unless adaptive |
+| `ctrl_error` | ratio | (signal - target) / target. Empty as above |
+| `ctrl_p_term`, `ctrl_i_term` | bias units | proportional term / integral term of the last PI step (the integral is always present in adaptive mode) |
+| `ctrl_update_ms` | ms | CPU time of the controller's own work in the frame (smoothing, PI step, applying the bias) |
 
 Draw-call, primitive and GPU readings of 0 are stored as empty (a rendered scene cannot have zero); the JSON
 `summary.columns.<name>.available` says whether any sample existed.
-| `grass_clumps_t0`, `grass_clumps_t1`, `grass_clumps_t2` | count | grass clumps drawn at each tier (legacy tufts count as t0) |
-| `grass_switches` | count | grass cells that changed tier in the update that preceded the row's frame; `0` when grass LOD is off, empty with no GrassLod node |
-| `grass_update_ms` | ms | CPU time of that grass update. Empty unless grass LOD is on |
+
+### Schema versions
+**4** = + `lod_policies_updated` and the `ctrl_*` columns, `lod_bias` filled in adaptive mode; JSON adds `adaptive`, `config.controller`,
+`config.profile`, `display_at_end` (window, viewport and renderer read back at the end of the run) and per-category
+`initialization` (build and resync cost, separate from the steady-state `updates`). `csv_schema_version` in the JSON: 1 = harness + tree columns, 2 = + grass columns (not recorded then), **3** = + bush,
+debris, rock and total-cost columns (new columns are appended; earlier columns keep their meaning). Version 3 also
+changes the default grass to `v2`, so a v3 `none` run is not comparable with a v1 `none` run (different grass). The JSON
+adds `categories` (per policy: settings, instance counts, switches in the measured run, integrity checks), `terrain3d`
+(Terrain3D's own LOD/collision settings, recorded and never changed) and `scene.instances_by_kind`.
 
 Level counts and switches are read at the start of the frame, so they describe the LOD state the previous frame
 was drawn with. `summary.lod_switches_total` and `lod.*` in the JSON hold the totals and the result of the two

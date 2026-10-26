@@ -1,10 +1,10 @@
-extends Node
+extends "res://scripts/lod/lod_policy.gd"
 ## Grass style and distance LOD for the procedural grass field (GrassField, built by grass_builder.gd).
 ##
 ## style LEGACY: the original sparse tufts baked into the Vegetation scene are shown and the new field is hidden
 ## (the reference configuration). style V2: the new field is shown and the legacy tufts are hidden.
-## lod_enabled false: every V2 cell stays at tier 0, full detail (the "no grass LOD" reference).
-## lod_enabled true: each 32 m cell shows exactly one tier by distance from the active camera to the cell's
+## `enabled` (alias `lod_enabled`) false: every V2 cell stays at tier 0, full detail (the "no grass LOD" reference).
+## `enabled` true: each 32 m cell shows exactly one tier by distance from the active camera to the cell's
 ## bounds, with hysteresis. Tier 0 = fuller clumps at full density, tier 1 = simpler clumps at 40 % density,
 ## tier 2 = simplest clumps at 12 %, beyond cull_distance = no grass. Distance-only, like the tree baseline.
 ## Storage is chunk-level MultiMesh data: switching a cell only toggles node visibility; transforms,
@@ -16,8 +16,12 @@ const TIERS := 3
 
 @export var style: Style = Style.V2:
 	set = set_style
-@export var lod_enabled: bool = true:
-	set = set_lod_enabled
+## Name from before the shared LodPolicy interface; the same switch as `enabled`.
+var lod_enabled: bool:
+	get:
+		return enabled
+	set(value):
+		enabled = value
 @export var field_path: NodePath = ^"../GrassField"
 @export var legacy_path: NodePath = ^"../Vegetation"
 ## Sway amplitude of the grass shader (0 = still grass, 1 = default). Independent of the LOD settings.
@@ -33,11 +37,8 @@ const TIERS := 3
 ## Half-width of the dead band around each distance, in metres.
 @export var hysteresis: float = 6.0
 
-## Cells that changed tier in the most recent update, and in total (restores and resyncs are not counted).
-var frame_switches: int = 0
-var total_switches: int = 0
-## CPU time of the most recent update in milliseconds.
-var last_update_ms: float = 0.0
+# frame_switches / total_switches count cells that changed tier (restores and resyncs are not counted);
+# last_update_ms is the CPU time of the most recent update. Both come from LodPolicy.
 
 class Cell:
 	var node: Node3D
@@ -57,7 +58,6 @@ var _legacy_clumps: int = 0
 var _tier_clumps := PackedInt32Array([0, 0, 0])
 var _cells_by_tier := PackedInt32Array([0, 0, 0, 0])
 var _thresholds := PackedFloat32Array()
-var _resync_pending: bool = true
 var _warned: bool = false
 var _material: ShaderMaterial
 
@@ -78,13 +78,38 @@ func set_wind_strength(value: float) -> void:
 		_material.set_shader_parameter("wind_strength", wind_strength)
 
 
-func set_lod_enabled(value: bool) -> void:
-	if value == lod_enabled:
-		return
-	lod_enabled = value
+func _enabled_changed() -> void:
 	_resync_pending = true
-	if _built and not lod_enabled:
+	if _built and not enabled:
 		_set_all_tiers(0)
+
+
+func category() -> String:
+	return "grass"
+
+
+func switch_unit() -> String:
+	return "cells"
+
+
+## Clumps in the scene for the active style (legacy tufts, or the V2 field at full detail), and how many are drawn.
+func instance_total() -> int:
+	if not _built:
+		return 0
+	return _cell_total(0) if is_v2_active() else _legacy_clumps
+
+
+func instance_drawn() -> int:
+	var counts := tier_clump_counts()
+	return counts[0] + counts[1] + counts[2]
+
+
+func tier_counts() -> PackedInt32Array:
+	return tier_clump_counts()
+
+
+func tier_labels() -> PackedStringArray:
+	return PackedStringArray(["T0 full", "T1 40%", "T2 12%"])
 
 
 func is_built() -> bool:
@@ -111,7 +136,7 @@ func cell_tier_counts() -> PackedInt32Array:
 
 func describe() -> Dictionary:
 	return {
-		"style": "v2" if style == Style.V2 else "legacy", "lod_enabled": lod_enabled,
+		"style": "v2" if style == Style.V2 else "legacy", "lod_enabled": enabled,
 		"tier1_distance_m": tier1_distance, "tier2_distance_m": tier2_distance, "cull_distance_m": cull_distance,
 		"hysteresis_m": hysteresis, "cells": _cells.size(), "legacy_clumps": _legacy_clumps,
 		"field_clumps_full_detail": _cell_total(0),
@@ -125,7 +150,7 @@ func resync() -> void:
 	var camera := get_viewport().get_camera_3d()
 	if camera == null or style != Style.V2 or _field == null:
 		return
-	if not lod_enabled:
+	if not enabled:
 		_set_all_tiers(0)
 		return
 	var origin := camera.global_position
@@ -162,10 +187,10 @@ func verify() -> String:
 	return "; ".join(errors)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not _prepare():
 		return
-	if style != Style.V2 or _field == null or not lod_enabled:
+	if style != Style.V2 or _field == null or not enabled:
 		frame_switches = 0
 		return
 	var camera := get_viewport().get_camera_3d()
@@ -174,13 +199,21 @@ func _process(_delta: float) -> void:
 	if _resync_pending:
 		resync()
 		_resync_pending = false
+	if not _update_due(delta, camera.global_position):
+		_skip_update()
+		return
 	_update(camera.global_position)
 
 
 func _update(origin: Vector3) -> void:
-	var started := Time.get_ticks_usec()
-	frame_switches = 0
-	for cell in _cells:
+	var started := _begin_update()
+	var count := _cells.size()
+	_backlog = false
+	for k in count:
+		var index := _cursor + k
+		if index >= count:
+			index -= count
+		var cell := _cells[index]
 		var distance := _distance(cell, origin)
 		var tier := cell.tier
 		while tier < TIERS and distance > _thresholds[tier] + hysteresis:
@@ -189,8 +222,12 @@ func _update(origin: Vector3) -> void:
 			tier -= 1
 		if tier != cell.tier:
 			_set_tier(cell, tier, true)
-	total_switches += frame_switches
-	last_update_ms = (Time.get_ticks_usec() - started) / 1000.0
+			if max_changes_per_update > 0 and frame_switches >= max_changes_per_update:
+				# Budget used up: the cells not looked at yet are handled by the next update.
+				_cursor = index + 1 if index + 1 < count else 0
+				_backlog = k < count - 1
+				break
+	_finish_update(started)
 
 
 ## Distance from `origin` to the nearest point of the cell's padded bounds.
@@ -198,7 +235,7 @@ func _distance(cell: Cell, origin: Vector3) -> float:
 	var dx := maxf(maxf(cell.bounds_min.x - origin.x, origin.x - cell.bounds_max.x), 0.0)
 	var dy := maxf(maxf(cell.bounds_min.y - origin.y, origin.y - cell.bounds_max.y), 0.0)
 	var dz := maxf(maxf(cell.bounds_min.z - origin.z, origin.z - cell.bounds_max.z), 0.0)
-	return sqrt(dx * dx + dy * dy + dz * dz)
+	return sqrt(dx * dx + dy * dy + dz * dz) * _dist_scale
 
 
 func _plain_tier(distance: float) -> int:
@@ -255,6 +292,7 @@ func _prepare() -> bool:
 	_thresholds = PackedFloat32Array([tier1_distance, tier2_distance, cull_distance])
 	if _built:
 		return true
+	var started := Time.get_ticks_usec()
 	var legacy_root := get_node_or_null(legacy_path)
 	if legacy_root != null:
 		for chunk in legacy_root.get_children():
@@ -291,7 +329,8 @@ func _prepare() -> bool:
 	_built = true
 	set_wind_strength(wind_strength)
 	_apply_style()
+	build_ms = (Time.get_ticks_usec() - started) / 1000.0
 	print("[grass] %s style, %d cells, %d full-detail clumps, %d legacy clumps, LOD %s (%.0f/%.0f/%.0f m, hysteresis %.0f m)" % [
 			"v2" if is_v2_active() else "legacy", _cells.size(), _cell_total(0), _legacy_clumps,
-			"on" if lod_enabled else "off", tier1_distance, tier2_distance, cull_distance, hysteresis])
+			"on" if enabled else "off", tier1_distance, tier2_distance, cull_distance, hysteresis])
 	return true
